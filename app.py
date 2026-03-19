@@ -33,6 +33,7 @@ class CmdBoxApp:
         self.selected_board_id: Optional[str] = None
         self.search_keyword: str = ""
         self.search_board_ids: Optional[List[str]] = None
+        self.search_tag: Optional[str] = None
 
         # 检查是否已初始化
         config_path = Path.home() / ".cmdbox"
@@ -97,8 +98,8 @@ class CmdBoxApp:
         self.header = ft.Container(
             content=ft.Row([
                 ft.Row([
-                    ft.Icon(ft.Icons.TERMINAL, size=20, color=ft.Colors.BLUE_600),
-                    ft.Text("CmdBox", size=18, weight=ft.FontWeight.W_600, color=ft.Colors.GREY_800),
+                    ft.Icon(ft.Icons.TERMINAL, size=18, color=ft.Colors.BLUE_600),
+                    ft.Text("CmdBox", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.GREY_800),
                 ]),
                 ft.Row([
                     ft.IconButton(
@@ -115,7 +116,7 @@ class CmdBoxApp:
                     )
                 ], spacing=0)
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-            padding=12,
+            padding=8,
             bgcolor=ft.Colors.WHITE,
             border=ft.border.only(bottom=ft.border.BorderSide(1, ft.Colors.GREY_200))
         )
@@ -133,6 +134,7 @@ class CmdBoxApp:
         # 搜索栏
         self.search_bar = SearchBar(
             boards=self.data_service.boards,
+            tags=self._get_all_tags(),
             on_search=self._on_search
         )
 
@@ -182,7 +184,8 @@ class CmdBoxApp:
         """刷新指令列表"""
         commands = self.data_service.search_commands(
             self.search_keyword,
-            self.search_board_ids
+            self.search_board_ids,
+            self.search_tag
         )
         self.command_list.update_commands(commands)
 
@@ -193,6 +196,7 @@ class CmdBoxApp:
             self.selected_board_id
         )
         self.search_bar.update_boards(self.data_service.boards)
+        self.search_bar.update_tags(self._get_all_tags())
         # 同时更新指令列表的板块字典
         boards_dict = {b.id: b for b in self.data_service.boards}
         self.command_list.update_boards(boards_dict)
@@ -204,11 +208,19 @@ class CmdBoxApp:
         self._refresh_commands()
         self._refresh_sidebar()
 
-    def _on_search(self, keyword: str, board_ids: Optional[List[str]]):
+    def _on_search(self, keyword: str, board_ids: Optional[List[str]], tag: Optional[str] = None):
         """搜索"""
         self.search_keyword = keyword
         self.search_board_ids = board_ids
+        self.search_tag = tag
         self._refresh_commands()
+
+    def _get_all_tags(self) -> List[str]:
+        """获取所有已使用的标签"""
+        tags = set()
+        for cmd in self.data_service.commands:
+            tags.update(cmd.tags)
+        return list(tags)
 
     def _on_add_board(self):
         """添加板块"""

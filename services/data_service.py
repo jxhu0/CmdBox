@@ -138,7 +138,8 @@ class DataService:
     def search_commands(
         self,
         keyword: str,
-        board_ids: Optional[List[str]] = None
+        board_ids: Optional[List[str]] = None,
+        tag: Optional[str] = None
     ) -> List[Command]:
         """搜索指令"""
         results = self.commands
@@ -146,6 +147,10 @@ class DataService:
         # 按板块过滤
         if board_ids:
             results = [c for c in results if c.board_id in board_ids]
+
+        # 按标签过滤
+        if tag:
+            results = [c for c in results if tag in c.tags]
 
         # 按关键词过滤
         if keyword:
@@ -155,7 +160,7 @@ class DataService:
                 if keyword in c.title.lower()
                 or keyword in c.content.lower()
                 or (c.description and keyword in c.description.lower())
-                or any(keyword in tag.lower() for tag in c.tags)
+                or any(keyword in t.lower() for t in c.tags)
             ]
 
         # 收藏置顶，然后按更新时间降序
