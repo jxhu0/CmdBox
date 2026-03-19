@@ -82,8 +82,22 @@ class CommandCard(ft.Container):
                 )
             )
 
+        # "显示全部/收起"按钮（仅在内容被截断时显示）- 放在省略号同一行
+        if self._is_truncated:
+            content_and_tags_controls.append(
+                ft.GestureDetector(
+                    content=ft.Container(
+                        content=ft.Row([
+                            ft.Text("显示全部" if not self._is_expanded else "收起", size=10, color=ft.Colors.BLUE_700),
+                            ft.Icon(ft.Icons.EXPAND_MORE if not self._is_expanded else ft.Icons.EXPAND_LESS, size=12, color=ft.Colors.BLUE_700),
+                        ], spacing=2, tight=True),
+                        padding=4,
+                    ),
+                    on_tap=self._toggle_expand
+                )
+            )
+
         # 内容和标签放在 Row 中，标签紧跟文本
-        # 收起状态: 标签跟在省略号后面，展开状态时标签跟在内容后面
         content_and_tags = ft.Row(
             content_and_tags_controls,
             spacing=6,
@@ -91,20 +105,6 @@ class CommandCard(ft.Container):
             tight=True,
             vertical_alignment=ft.CrossAxisAlignment.CENTER
         )
-
-        # "显示全部/收起"按钮（仅在内容被截断时显示）
-        expand_button = None
-        if self._is_truncated:
-            expand_button = ft.GestureDetector(
-                content=ft.Container(
-                    content=ft.Row([
-                        ft.Icon(ft.Icons.EXPAND_MORE if not self._is_expanded else ft.Icons.EXPAND_LESS, size=12, color=ft.Colors.BLUE_700),
-                        ft.Text("显示全部" if not self._is_expanded else "收起", size=10, color=ft.Colors.BLUE_700)
-                    ], spacing=2, tight=True),
-                    padding=4,
-                ),
-                on_tap=self._toggle_expand
-            )
 
         # 操作按钮行
         actions_row = ft.Row([
@@ -140,15 +140,8 @@ class CommandCard(ft.Container):
             title_row,
             ft.Divider(height=2, color="transparent"),
             content_and_tags,
-        ]
-
-        # 如果有展开按钮，添加到内容列
-        if expand_button:
-            column_controls.append(expand_button)
-
-        column_controls.extend([
             ft.Divider(height=2, color="transparent"),
             actions_row
-        ])
+        ]
 
         return ft.Column(column_controls, spacing=0)
