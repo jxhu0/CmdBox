@@ -12,6 +12,7 @@ class Sidebar(ft.Container):
         boards: List[Board],
         on_board_select: Callable[[str], None],
         on_add_board: Callable[[], None],
+        on_edit_board: Callable[[str], None],
         on_delete_board: Callable[[str], None],
         selected_board_id: Optional[str] = None
     ):
@@ -19,6 +20,7 @@ class Sidebar(ft.Container):
         self.boards = boards
         self.on_board_select = on_board_select
         self.on_add_board = on_add_board
+        self.on_edit_board = on_edit_board
         self.on_delete_board = on_delete_board
         self.selected_board_id = selected_board_id
 
@@ -36,13 +38,19 @@ class Sidebar(ft.Container):
                     ft.Text(board.icon, size=14),
                     ft.Text(board.name, size=12, weight=ft.FontWeight.BOLD if is_selected else ft.FontWeight.NORMAL),
                     ft.IconButton(
+                        icon=ft.Icons.EDIT,
+                        icon_size=9,
+                        tooltip="编辑板块",
+                        on_click=lambda e, bid=board.id: self.on_edit_board(bid)
+                    ),
+                    ft.IconButton(
                         icon=ft.Icons.DELETE_OUTLINE,
-                        icon_size=12,
+                        icon_size=9,
                         tooltip="删除板块",
                         on_click=lambda e, bid=board.id: self.on_delete_board(bid)
                     )
-                ]),
-                padding=5,
+                ], spacing=1, tight=True),
+                padding=2,
                 border_radius=3,
                 bgcolor=ft.Colors.BLUE_50 if is_selected else None,
                 on_click=lambda e, bid=board.id: self.on_board_select(bid)
@@ -53,16 +61,16 @@ class Sidebar(ft.Container):
         add_btn = ft.TextButton(
             content=ft.Row([
                 ft.Icon(ft.Icons.ADD, size=12),
-                ft.Text("新建板块", size=10)
+                ft.Text("新建板块", size=11)
             ]),
             on_click=lambda e: self.on_add_board()
         )
 
         return ft.Column([
             ft.Text("板块", size=10, color=ft.Colors.GREY_500, weight=ft.FontWeight.BOLD),
-            ft.Divider(height=5, color="transparent"),
+            ft.Divider(height=3, color="transparent"),
             *board_items,
-            ft.Divider(height=10, color="transparent"),
+            ft.Divider(height=5, color="transparent"),
             add_btn
         ])
 

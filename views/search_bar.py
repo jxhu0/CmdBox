@@ -16,7 +16,7 @@ class SearchBar(ft.Container):
         self.boards = boards
         self.on_search = on_search
 
-        self.padding = 10
+        self.padding = 5
         self.content = self._build_content()
 
     def _build_content(self) -> ft.Row:
@@ -25,7 +25,8 @@ class SearchBar(ft.Container):
             hint_text="搜索指令...",
             prefix_icon=ft.Icons.SEARCH,
             on_change=self._on_search_change,
-            expand=True
+            expand=True,
+            text_size=12
         )
 
         # 板块下拉选择
@@ -38,7 +39,7 @@ class SearchBar(ft.Container):
         self.board_dropdown = ft.Dropdown(
             options=board_options,
             value="all",
-            width=200,
+            width=130,
             on_select=self._on_board_change
         )
 

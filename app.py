@@ -119,6 +119,7 @@ class CmdBoxApp:
             boards=self.data_service.boards,
             on_board_select=self._on_board_select,
             on_add_board=self._on_add_board,
+            on_edit_board=self._on_edit_board,
             on_delete_board=self._on_delete_board,
             selected_board_id=self.selected_board_id
         )
@@ -154,7 +155,7 @@ class CmdBoxApp:
 
         # 布局（侧边栏宽度减小）
         layout = ft.Row([
-            ft.Container(content=self.sidebar, width=150),
+            ft.Container(content=self.sidebar, width=170),
             ft.VerticalDivider(width=1),
             ft.Container(content=main_content, expand=True)
         ], expand=True)
@@ -214,6 +215,24 @@ class CmdBoxApp:
             self.page.update()
 
         dialog = BoardDialog("新建板块", on_save=on_save)
+        self.page.show_dialog(dialog)
+        self.page.update()
+
+    def _on_edit_board(self, board_id: str):
+        """编辑板块"""
+        board = self.data_service.get_board(board_id)
+        if not board:
+            return
+
+        def on_save(name: str, icon: str):
+            if name:
+                board.update(name=name, icon=icon)
+                self.data_service.update_board(board)
+                self._refresh_sidebar()
+            self.page.pop_dialog()
+            self.page.update()
+
+        dialog = BoardDialog("编辑板块", board=board, on_save=on_save)
         self.page.show_dialog(dialog)
         self.page.update()
 
