@@ -6,6 +6,62 @@ from models.board import Board
 from utils.helpers import truncate_text
 
 
+# 标签颜色配置
+TAG_COLORS = {
+    "python": (ft.Colors.YELLOW_100, ft.Colors.YELLOW_800),
+    "git": (ft.Colors.ORANGE_100, ft.Colors.ORANGE_800),
+    "docker": (ft.Colors.CYAN_100, ft.Colors.CYAN_800),
+    "linux": (ft.Colors.PURPLE_100, ft.Colors.PURPLE_800),
+    "bash": (ft.Colors.GREEN_100, ft.Colors.GREEN_800),
+    "shell": (ft.Colors.GREEN_100, ft.Colors.GREEN_800),
+    "npm": (ft.Colors.RED_100, ft.Colors.RED_800),
+    "node": (ft.Colors.GREEN_100, ft.Colors.GREEN_800),
+    "react": (ft.Colors.CYAN_100, ft.Colors.CYAN_800),
+    "vue": (ft.Colors.GREEN_100, ft.Colors.GREEN_800),
+    "rust": (ft.Colors.ORANGE_100, ft.Colors.ORANGE_800),
+    "go": (ft.Colors.CYAN_100, ft.Colors.CYAN_800),
+    "java": (ft.Colors.RED_100, ft.Colors.RED_800),
+    "sql": (ft.Colors.BLUE_100, ft.Colors.BLUE_800),
+    "aws": (ft.Colors.YELLOW_100, ft.Colors.YELLOW_800),
+    "api": (ft.Colors.PURPLE_100, ft.Colors.PURPLE_800),
+    "web": (ft.Colors.BLUE_100, ft.Colors.BLUE_800),
+    "http": (ft.Colors.GREEN_100, ft.Colors.GREEN_800),
+    "json": (ft.Colors.YELLOW_100, ft.Colors.YELLOW_800),
+    "yaml": (ft.Colors.PINK_100, ft.Colors.PINK_800),
+    "mac": (ft.Colors.GREY_200, ft.Colors.GREY_800),
+    "windows": (ft.Colors.BLUE_100, ft.Colors.BLUE_800),
+    "ios": (ft.Colors.GREY_200, ft.Colors.GREY_800),
+    "android": (ft.Colors.GREEN_100, ft.Colors.GREEN_800),
+    "k8s": (ft.Colors.BLUE_100, ft.Colors.BLUE_800),
+    "kubernetes": (ft.Colors.BLUE_100, ft.Colors.BLUE_800),
+    "devops": (ft.Colors.PURPLE_100, ft.Colors.PURPLE_800),
+    "ci": (ft.Colors.GREEN_100, ft.Colors.GREEN_800),
+    "cd": (ft.Colors.BLUE_100, ft.Colors.BLUE_800),
+    "test": (ft.Colors.GREEN_100, ft.Colors.GREEN_800),
+    "security": (ft.Colors.RED_100, ft.Colors.RED_800),
+    "network": (ft.Colors.CYAN_100, ft.Colors.CYAN_800),
+    "ssh": (ft.Colors.YELLOW_100, ft.Colors.YELLOW_800),
+    "vim": (ft.Colors.GREEN_100, ft.Colors.GREEN_800),
+    "tmux": (ft.Colors.CYAN_100, ft.Colors.CYAN_800),
+    "regex": (ft.Colors.PINK_100, ft.Colors.PINK_800),
+    "csv": (ft.Colors.GREEN_100, ft.Colors.GREEN_800),
+    "gy": (ft.Colors.TEAL_100, ft.Colors.TEAL_800),
+    "self": (ft.Colors.INDIGO_100, ft.Colors.INDIGO_800),
+    "cc": (ft.Colors.LIME_100, ft.Colors.LIME_800),
+    "claw": (ft.Colors.AMBER_100, ft.Colors.AMBER_800),
+    "tool": (ft.Colors.PINK_100, ft.Colors.PINK_800),
+}
+
+
+def get_tag_colors(tag: str) -> tuple:
+    """根据标签名称获取颜色配置"""
+    tag_lower = tag.lower()
+    if tag_lower in TAG_COLORS:
+        return TAG_COLORS[tag_lower]
+    # 默认颜色
+    return (ft.Colors.BLUE_50, ft.Colors.BLUE_700)
+
+
 class CommandCard(ft.Container):
     """指令卡片组件 - 紧凑布局设计，    """
 
@@ -81,12 +137,13 @@ class CommandCard(ft.Container):
 
         # 添加标签
         for tag in self.command.tags[:3]:
+            bg_color, text_color = get_tag_colors(tag)
             content_and_tags_controls.append(
                 ft.Container(
-                    content=ft.Text(tag, size=11, color=ft.Colors.BLUE_700),
-                    bgcolor=ft.Colors.BLUE_50,
-                    padding=4,
-                    border_radius=4
+                    content=ft.Text(tag, size=11, color=text_color, weight=ft.FontWeight.W_500),
+                    bgcolor=bg_color,
+                    padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                    border_radius=12
                 )
             )
 
