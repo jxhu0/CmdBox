@@ -93,10 +93,10 @@ class CmdBoxApp:
         # 获取板块字典
         boards_dict = {b.id: b for b in self.data_service.boards}
 
-        # 顶部栏
+        # 顶部栏（紧凑设计）
         self.header = ft.Container(
             content=ft.Row([
-                ft.Text("CmdBox", size=20, weight=ft.FontWeight.BOLD),
+                ft.Text("CmdBox", size=16, weight=ft.FontWeight.BOLD),
                 ft.Row([
                     ft.IconButton(
                         icon=ft.Icons.SYNC,
@@ -110,15 +110,16 @@ class CmdBoxApp:
                     )
                 ])
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-            padding=10,
+            padding=5,
             bgcolor=ft.Colors.BLUE_50
         )
 
-        # 侧边栏
+        # 侧边栏（宽度减小）
         self.sidebar = Sidebar(
             boards=self.data_service.boards,
             on_board_select=self._on_board_select,
             on_add_board=self._on_add_board,
+            on_delete_board=self._on_delete_board,
             selected_board_id=self.selected_board_id
         )
 
@@ -144,16 +145,16 @@ class CmdBoxApp:
             on_click=lambda e: self._on_add_command()
         )
 
-        # 主内容区
+        # 主内容区（搜索栏紧凑）
         main_content = ft.Column([
-            ft.Container(content=self.search_bar, padding=10),
+            ft.Container(content=self.search_bar, padding=5),
             ft.Divider(height=1),
-            ft.Container(content=self.command_list, expand=True, padding=10)
+            ft.Container(content=self.command_list, expand=True, padding=5)
         ], expand=True)
 
-        # 布局
+        # 布局（侧边栏宽度减小）
         layout = ft.Row([
-            ft.Container(content=self.sidebar, width=200),
+            ft.Container(content=self.sidebar, width=150),
             ft.VerticalDivider(width=1),
             ft.Container(content=main_content, expand=True)
         ], expand=True)
@@ -185,6 +186,9 @@ class CmdBoxApp:
             self.selected_board_id
         )
         self.search_bar.update_boards(self.data_service.boards)
+        # 同时更新指令列表的板块字典
+        boards_dict = {b.id: b for b in self.data_service.boards}
+        self.command_list.update_boards(boards_dict)
 
     def _on_board_select(self, board_id: str):
         """选择板块"""
@@ -210,6 +214,30 @@ class CmdBoxApp:
             self.page.update()
 
         dialog = BoardDialog("新建板块", on_save=on_save)
+        self.page.show_dialog(dialog)
+        self.page.update()
+
+    def _on_delete_board(self, board_id: str):
+        """删除板块"""
+        board = next((b for b in self.data_service.boards if b.id == board_id), None)
+        if not board:
+            return
+
+        def on_confirm():
+            deleted_count = self.data_service.delete_board(board_id)
+            # 如果删除的是当前选中的板块，清除选择
+            if self.selected_board_id == board_id:
+                self.selected_board_id = None
+                self.search_board_ids = None
+            self._refresh_sidebar()
+            self._refresh_commands()
+            self._show_snack_bar(f"已删除板块「{board.name}」及 {deleted_count} 条指令")
+
+        dialog = ConfirmDialog(
+            "确认删除",
+            f"确定要删除板块「{board.name}」吗？该板块下的所有指令也会被删除。",
+            on_confirm=on_confirm
+        )
         self.page.show_dialog(dialog)
         self.page.update()
 

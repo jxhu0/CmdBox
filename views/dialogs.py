@@ -181,10 +181,11 @@ class ConfirmDialog(ft.AlertDialog):
             self.page.update()
 
     def _on_confirm(self, e):
+        if self.page:
+            self.page.pop_dialog()
         if self.on_confirm_callback:
             self.on_confirm_callback()
         if self.page:
-            self.page.pop_dialog()
             self.page.update()
 
 
