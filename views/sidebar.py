@@ -25,7 +25,7 @@ class Sidebar(ft.Container):
         self.selected_board_id = selected_board_id
 
         self.width = 180
-        self.bgcolor = ft.Colors.GREY_100
+        self.bgcolor = ft.Colors.WHITE
         self.padding = 5
         self.content = self._build_content()
 
