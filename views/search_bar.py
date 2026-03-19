@@ -16,7 +16,7 @@ class SearchBar(ft.Container):
         self.boards = boards
         self.on_search = on_search
 
-        self.padding = 5
+        self.padding = 8
         self.content = self._build_content()
 
     def _build_content(self) -> ft.Row:
@@ -26,7 +26,12 @@ class SearchBar(ft.Container):
             prefix_icon=ft.Icons.SEARCH,
             on_change=self._on_search_change,
             expand=True,
-            text_size=12
+            text_size=13,
+            bgcolor=ft.Colors.GREY_50,
+            border_color=ft.Colors.GREY_300,
+            focused_border_color=ft.Colors.BLUE_500,
+            border_radius=8,
+            content_padding=ft.padding.symmetric(horizontal=12, vertical=8)
         )
 
         # 板块下拉选择
@@ -39,14 +44,19 @@ class SearchBar(ft.Container):
         self.board_dropdown = ft.Dropdown(
             options=board_options,
             value="all",
-            width=130,
-            on_select=self._on_board_change
+            width=140,
+            on_select=self._on_board_change,
+            bgcolor=ft.Colors.GREY_50,
+            border_color=ft.Colors.GREY_300,
+            border_radius=8,
+            content_padding=ft.padding.symmetric(horizontal=8, vertical=8)
         )
 
         return ft.Row([
             self.search_input,
+            ft.Container(width=8),
             self.board_dropdown
-        ])
+        ], spacing=0)
 
     def _on_search_change(self, e):
         self._do_search()

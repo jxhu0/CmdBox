@@ -93,25 +93,31 @@ class CmdBoxApp:
         # 获取板块字典
         boards_dict = {b.id: b for b in self.data_service.boards}
 
-        # 顶部栏（紧凑设计）
+        # 顶部栏（简洁现代风格）
         self.header = ft.Container(
             content=ft.Row([
-                ft.Text("CmdBox", size=16, weight=ft.FontWeight.BOLD),
+                ft.Row([
+                    ft.Icon(ft.Icons.TERMINAL, size=20, color=ft.Colors.BLUE_600),
+                    ft.Text("CmdBox", size=18, weight=ft.FontWeight.W_600, color=ft.Colors.GREY_800),
+                ]),
                 ft.Row([
                     ft.IconButton(
                         icon=ft.Icons.SYNC,
+                        icon_size=20,
                         tooltip="同步",
                         on_click=self._on_sync
                     ),
                     ft.IconButton(
-                        icon=ft.Icons.SETTINGS,
+                        icon=ft.Icons.SETTINGS_OUTLINED,
+                        icon_size=20,
                         tooltip="设置",
                         on_click=self._on_settings
                     )
-                ])
+                ], spacing=0)
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-            padding=5,
-            bgcolor=ft.Colors.BLUE_50
+            padding=12,
+            bgcolor=ft.Colors.WHITE,
+            border=ft.border.only(bottom=ft.border.BorderSide(1, ft.Colors.GREY_200))
         )
 
         # 侧边栏（宽度减小）
