@@ -206,14 +206,16 @@ class CmdBoxApp:
     def _refresh_commands(self):
         """刷新指令列表"""
         if self.show_favorites_only:
-            # 收藏板块：显示所有收藏指令
+            # 收藏板块：显示所有收藏指令，隐藏移动按钮
             commands = self.data_service.get_favorite_commands()
+            self.command_list.set_show_move_buttons(False)
         else:
             commands = self.data_service.search_commands(
                 self.search_keyword,
                 self.search_board_ids,
                 self.search_tag
             )
+            self.command_list.set_show_move_buttons(True)
         self.command_list.update_commands(commands)
 
     def _refresh_sidebar(self):

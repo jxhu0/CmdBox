@@ -74,7 +74,8 @@ class CommandCard(ft.Container):
         on_delete: Callable[[Command], None],
         on_toggle_favorite: Callable[[Command], None],
         on_move_up: Callable[[Command], None] = None,
-        on_move_down: Callable[[Command], None] = None
+        on_move_down: Callable[[Command], None] = None,
+        show_move_buttons: bool = True
     ):
         super().__init__()
         self.command = command
@@ -85,6 +86,7 @@ class CommandCard(ft.Container):
         self.on_toggle_favorite = on_toggle_favorite
         self.on_move_up = on_move_up
         self.on_move_down = on_move_down
+        self.show_move_buttons = show_move_buttons
 
         # 状态
         self._is_expanded = False
@@ -178,47 +180,56 @@ class CommandCard(ft.Container):
         )
 
         # 操作按钮行
+        action_buttons = []
+
+        # 上下移按钮（仅在普通板块显示）
+        if self.show_move_buttons:
+            action_buttons.extend([
+                ft.IconButton(
+                    icon=ft.Icons.KEYBOARD_ARROW_UP,
+                    icon_size=16,
+                    tooltip="上移",
+                    on_click=lambda e: self.on_move_up(self.command) if self.on_move_up else None
+                ),
+                ft.IconButton(
+                    icon=ft.Icons.KEYBOARD_ARROW_DOWN,
+                    icon_size=16,
+                    tooltip="下移",
+                    on_click=lambda e: self.on_move_down(self.command) if self.on_move_down else None
+                )
+            ])
+
+        action_buttons.extend([
+            ft.IconButton(
+                icon=ft.Icons.CONTENT_COPY,
+                icon_size=16,
+                tooltip="复制",
+                on_click=lambda e: self.on_copy(self.command)
+            ),
+            ft.IconButton(
+                icon=ft.Icons.EDIT_OUTLINED,
+                icon_size=16,
+                tooltip="编辑",
+                on_click=lambda e: self.on_edit(self.command)
+            ),
+            ft.IconButton(
+                icon=ft.Icons.STAR if self.command.is_favorite else ft.Icons.STAR_OUTLINE,
+                icon_color=ft.Colors.AMBER if self.command.is_favorite else ft.Colors.GREY_500,
+                icon_size=16,
+                tooltip="取消收藏" if self.command.is_favorite else "收藏",
+                on_click=lambda e: self.on_toggle_favorite(self.command)
+            ),
+            ft.IconButton(
+                icon=ft.Icons.DELETE_OUTLINE,
+                icon_size=16,
+                tooltip="删除",
+                on_click=lambda e: self.on_delete(self.command)
+            )
+        ])
+
         actions_row = ft.Row([
             ft.Container(
-                content=ft.Row([
-                    ft.IconButton(
-                        icon=ft.Icons.KEYBOARD_ARROW_UP,
-                        icon_size=16,
-                        tooltip="上移",
-                        on_click=lambda e: self.on_move_up(self.command) if self.on_move_up else None
-                    ),
-                    ft.IconButton(
-                        icon=ft.Icons.KEYBOARD_ARROW_DOWN,
-                        icon_size=16,
-                        tooltip="下移",
-                        on_click=lambda e: self.on_move_down(self.command) if self.on_move_down else None
-                    ),
-                    ft.IconButton(
-                        icon=ft.Icons.CONTENT_COPY,
-                        icon_size=16,
-                        tooltip="复制",
-                        on_click=lambda e: self.on_copy(self.command)
-                    ),
-                    ft.IconButton(
-                        icon=ft.Icons.EDIT_OUTLINED,
-                        icon_size=16,
-                        tooltip="编辑",
-                        on_click=lambda e: self.on_edit(self.command)
-                    ),
-                    ft.IconButton(
-                        icon=ft.Icons.STAR if self.command.is_favorite else ft.Icons.STAR_OUTLINE,
-                        icon_color=ft.Colors.AMBER if self.command.is_favorite else ft.Colors.GREY_500,
-                        icon_size=16,
-                        tooltip="取消收藏" if self.command.is_favorite else "收藏",
-                        on_click=lambda e: self.on_toggle_favorite(self.command)
-                    ),
-                    ft.IconButton(
-                        icon=ft.Icons.DELETE_OUTLINE,
-                        icon_size=16,
-                        tooltip="删除",
-                        on_click=lambda e: self.on_delete(self.command)
-                    )
-                ], spacing=0),
+                content=ft.Row(action_buttons, spacing=0),
                 bgcolor=ft.Colors.GREY_50,
                 border_radius=8,
                 padding=2

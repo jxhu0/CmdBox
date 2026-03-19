@@ -18,7 +18,8 @@ class CommandList(ft.Column):
         on_toggle_favorite: Callable[[Command], None],
         on_add_command: Callable[[], None],
         on_move_up: Callable[[Command], None] = None,
-        on_move_down: Callable[[Command], None] = None
+        on_move_down: Callable[[Command], None] = None,
+        show_move_buttons: bool = True
     ):
         super().__init__()
         self.boards = boards
@@ -29,6 +30,7 @@ class CommandList(ft.Column):
         self.on_add_command = on_add_command
         self.on_move_up = on_move_up
         self.on_move_down = on_move_down
+        self.show_move_buttons = show_move_buttons
         self.commands: List[Command] = []
 
         self.expand = True
@@ -65,7 +67,8 @@ class CommandList(ft.Column):
                 on_delete=self.on_delete,
                 on_toggle_favorite=self.on_toggle_favorite,
                 on_move_up=self.on_move_up,
-                on_move_down=self.on_move_down
+                on_move_down=self.on_move_down,
+                show_move_buttons=self.show_move_buttons
             )
             cards.append(card)
 
@@ -78,5 +81,11 @@ class CommandList(ft.Column):
 
     def update_boards(self, boards: Dict[str, Board]):
         self.boards = boards
+        self.controls = self._build_command_cards()
+        self.update()
+
+    def set_show_move_buttons(self, show: bool):
+        """设置是否显示移动按钮"""
+        self.show_move_buttons = show
         self.controls = self._build_command_cards()
         self.update()

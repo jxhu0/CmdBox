@@ -39,11 +39,15 @@ class Sidebar(ft.Container):
             is_selected = self.selected_board_id == self.favorites_board_id
             fav_item = ft.Container(
                 content=ft.Row([
-                    ft.Icon(ft.Icons.STAR, size=16, color=ft.Colors.AMBER_600 if is_selected else ft.Colors.GREY_500),
+                    ft.Container(
+                        content=ft.Text("⭐", size=16),
+                        margin=ft.margin.only(left=-6)  # 往左偏移一点，对齐其他板块
+                    ),
                     ft.Text("收藏", size=13, weight=ft.FontWeight.W_600 if is_selected else ft.FontWeight.NORMAL,
                             color=ft.Colors.AMBER_700 if is_selected else ft.Colors.GREY_700),
+                    ft.Container(content=None, expand=True)  # 空置位，保持对齐
                 ], spacing=4, tight=True),
-                padding=8,
+                padding=14,
                 border_radius=8,
                 bgcolor=ft.Colors.AMBER_50 if is_selected else ft.Colors.TRANSPARENT,
                 border=ft.border.only(left=ft.border.BorderSide(3, ft.Colors.AMBER_500)) if is_selected else None,
