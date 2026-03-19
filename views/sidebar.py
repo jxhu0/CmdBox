@@ -1,0 +1,65 @@
+# views/sidebar.py
+import flet as ft
+from typing import List, Callable, Optional
+from models.board import Board
+
+
+class Sidebar(ft.Container):
+    """左侧板块列表"""
+
+    def __init__(
+        self,
+        boards: List[Board],
+        on_board_select: Callable[[str], None],
+        on_add_board: Callable[[], None],
+        selected_board_id: Optional[str] = None
+    ):
+        super().__init__()
+        self.boards = boards
+        self.on_board_select = on_board_select
+        self.on_add_board = on_add_board
+        self.selected_board_id = selected_board_id
+
+        self.width = 200
+        self.bgcolor = ft.Colors.GREY_100
+        self.padding = 10
+        self.content = self._build_content()
+
+    def _build_content(self) -> ft.Column:
+        board_items = []
+        for board in self.boards:
+            is_selected = board.id == self.selected_board_id
+            item = ft.Container(
+                content=ft.Row([
+                    ft.Text(board.icon, size=16),
+                    ft.Text(board.name, size=14, weight=ft.FontWeight.BOLD if is_selected else ft.FontWeight.NORMAL)
+                ]),
+                padding=10,
+                border_radius=5,
+                bgcolor=ft.Colors.BLUE_50 if is_selected else None,
+                on_click=lambda e, bid=board.id: self.on_board_select(bid)
+            )
+            board_items.append(item)
+
+        # 添加新建按钮
+        add_btn = ft.TextButton(
+            content=ft.Row([
+                ft.Icon(ft.Icons.ADD, size=16),
+                ft.Text("新建板块", size=12)
+            ]),
+            on_click=lambda e: self.on_add_board()
+        )
+
+        return ft.Column([
+            ft.Text("板块", size=12, color=ft.Colors.GREY_500, weight=ft.FontWeight.BOLD),
+            ft.Divider(height=10, color="transparent"),
+            *board_items,
+            ft.Divider(height=20, color="transparent"),
+            add_btn
+        ])
+
+    def update_boards(self, boards: List[Board], selected_id: Optional[str] = None):
+        self.boards = boards
+        self.selected_board_id = selected_id
+        self.content = self._build_content()
+        self.update()

@@ -1,0 +1,179 @@
+# services/git_service.py
+import os
+from typing import Optional, Tuple
+from pathlib import Path
+from datetime import datetime
+
+
+class GitService:
+    """Git 同步服务"""
+
+    def __init__(self, repo_path: str):
+        self.repo_path = Path(repo_path)
+        self._git = None
+
+    @property
+    def git(self):
+        """延迟加载 gitpython"""
+        if self._git is None:
+            import git
+            self._git = git
+        return self._git
+
+    def is_repo(self) -> bool:
+        """检查是否是 Git 仓库"""
+        return (self.repo_path / ".git").exists()
+
+    def init_repo(self) -> bool:
+        """初始化 Git 仓库"""
+        try:
+            self.repo_path.mkdir(parents=True, exist_ok=True)
+            self.git.Repo.init(self.repo_path)
+            return True
+        except Exception as e:
+            print(f"Init repo error: {e}")
+            return False
+
+    def has_remote(self) -> bool:
+        """检查是否配置了远程仓库"""
+        if not self.is_repo():
+            return False
+        try:
+            repo = self.git.Repo(self.repo_path)
+            return len(repo.remotes) > 0
+        except Exception:
+            return False
+
+    def get_status(self) -> Tuple[bool, str]:
+        """获取仓库状态，返回 (有更改, 状态信息)"""
+        try:
+            repo = self.git.Repo(self.repo_path)
+            if repo.is_dirty():
+                return True, "有未提交的更改"
+            return False, "工作目录干净"
+        except Exception as e:
+            return False, f"获取状态失败: {e}"
+
+    def commit(self, message: str = "Update data") -> Tuple[bool, str]:
+        """提交更改"""
+        try:
+            repo = self.git.Repo(self.repo_path)
+            repo.git.add(A=True)
+            if repo.is_dirty():
+                repo.index.commit(message)
+                return True, "提交成功"
+            return True, "没有需要提交的更改"
+        except Exception as e:
+            return False, f"提交失败: {e}"
+
+    def pull(self) -> Tuple[bool, str]:
+        """拉取远程更改"""
+        try:
+            repo = self.git.Repo(self.repo_path)
+            if not repo.remotes:
+                return True, "没有配置远程仓库"
+
+            origin = repo.remotes.origin
+            current_branch = repo.active_branch.name
+
+            # 尝试获取远程分支信息
+            try:
+                origin.fetch()
+            except Exception:
+                return True, "无法获取远程信息，跳过拉取"
+
+            # 检查远程是否有对应分支
+            remote_branch = f"origin/{current_branch}"
+            if remote_branch not in [ref.name for ref in origin.refs]:
+                return True, "远程没有对应分支，跳过拉取"
+
+            # 尝试拉取，使用 --allow-unrelated-histories 允许合并不相关的历史
+            try:
+                repo.git.pull("origin", current_branch, "--allow-unrelated-histories")
+            except Exception as e:
+                error_msg = str(e)
+                # 如果是合并冲突，需要特殊处理
+                if "CONFLICT" in error_msg.upper() or "Merge conflict" in error_msg:
+                    # 尝试使用本地版本解决冲突
+                    repo.git.checkout("--ours", ".")
+                    repo.index.commit("Merge: keep local changes")
+                    return True, "拉取完成（已保留本地更改）"
+                raise e
+
+            return True, "拉取成功"
+        except Exception as e:
+            error_msg = str(e)
+            if "no reference" in error_msg.lower() or "couldn't find remote ref" in error_msg.lower():
+                return True, "远程仓库为空，跳过拉取"
+            return False, f"拉取失败: {error_msg}"
+
+    def push(self) -> Tuple[bool, str]:
+        """推送到远程"""
+        try:
+            repo = self.git.Repo(self.repo_path)
+            if not repo.remotes:
+                return True, "没有配置远程仓库"
+
+            origin = repo.remotes.origin
+
+            # 检查当前分支
+            current_branch = repo.active_branch.name
+
+            # 尝试推送，设置上游分支
+            try:
+                origin.push(current_branch)
+            except Exception:
+                # 可能是首次推送，需要设置上游分支
+                repo.git.push("--set-upstream", "origin", current_branch)
+
+            return True, "推送成功"
+        except Exception as e:
+            error_msg = str(e)
+            return False, f"推送失败: {error_msg}"
+
+    def get_remote_url(self) -> Optional[str]:
+        """获取远程仓库地址"""
+        if not self.is_repo():
+            return None
+        try:
+            repo = self.git.Repo(self.repo_path)
+            if repo.remotes:
+                return repo.remotes.origin.url
+            return None
+        except Exception:
+            return None
+
+    def set_remote_url(self, url: str) -> Tuple[bool, str]:
+        """设置远程仓库地址"""
+        try:
+            repo = self.git.Repo(self.repo_path)
+
+            # 移除现有的 origin 远程（如果存在）
+            if "origin" in [r.name for r in repo.remotes]:
+                repo.delete_remote(repo.remotes.origin)
+
+            # 添加新的远程仓库
+            repo.create_remote("origin", url)
+
+            return True, "设置成功"
+        except Exception as e:
+            return False, f"设置失败: {e}"
+
+    def sync(self) -> Tuple[bool, str]:
+        """同步：拉取 -> 提交 -> 推送"""
+        # 先拉取
+        success, msg = self.pull()
+        if not success:
+            return False, msg
+
+        # 提交本地更改
+        success, msg = self.commit(f"Sync at {datetime.now().isoformat()}")
+        if not success:
+            return False, msg
+
+        # 推送
+        success, msg = self.push()
+        if not success:
+            return False, msg
+
+        return True, "同步完成"
