@@ -30,10 +30,17 @@ class CommandCard(ft.Container):
         self._is_expanded = False
         self._is_truncated = len(command.content) > 100
 
-        self.padding = 8
-        self.border_radius = 8
-        self.border = ft.border.all(1, ft.Colors.GREY_300)
-        self.margin = ft.margin.only(bottom=6)
+        self.padding = 12
+        self.border_radius = 12
+        self.border = None
+        self.margin = ft.margin.only(bottom=8)
+        self.shadow = ft.BoxShadow(
+            spread_radius=1,
+            blur_radius=6,
+            color=ft.Colors.with_opacity(0.15, ft.Colors.GREY_400),
+            offset=(0, 2)
+        )
+        self.bgcolor = ft.Colors.WHITE
 
         self.content = self._build_content()
 
@@ -47,25 +54,26 @@ class CommandCard(ft.Container):
         # 标题行（包含描述）
         title_controls = [
             ft.Icon(ft.Icons.STAR if self.command.is_favorite else ft.Icons.STAR_BORDER,
-                    color=ft.Colors.AMBER if self.command.is_favorite else ft.Colors.GREY,
-                    size=16),
-            ft.Text(self.command.title, size=14, weight=ft.FontWeight.BOLD),
+                    color=ft.Colors.AMBER if self.command.is_favorite else ft.Colors.GREY_400,
+                    size=18),
+            ft.Text(self.command.title, size=15, weight=ft.FontWeight.W_600, color=ft.Colors.GREY_800),
         ]
 
         # 如果有描述，添加到标题行
         if self.command.description:
             title_controls.append(
-                ft.Text(" - " + self.command.description, size=12, color=ft.Colors.GREY_600)
+                ft.Text("· " + self.command.description, size=12, color=ft.Colors.GREY_500)
             )
 
-        title_row = ft.Row(title_controls, wrap=True)
+        title_row = ft.Row(title_controls, wrap=True, spacing=4)
 
         # 内容文本（根据展开状态决定是否截断）
         display_content = self.command.content if self._is_expanded else truncate_text(self.command.content, 100)
         content_text = ft.Text(
             display_content,
             size=13,
-            color=ft.Colors.GREY_700
+            color=ft.Colors.GREY_600,
+            font_family="monospace"
         )
 
         # 构建内容和标签的控件列表
@@ -88,10 +96,12 @@ class CommandCard(ft.Container):
                 ft.GestureDetector(
                     content=ft.Container(
                         content=ft.Row([
-                            ft.Text("显示全部" if not self._is_expanded else "收起", size=10, color=ft.Colors.BLUE_700),
-                            ft.Icon(ft.Icons.EXPAND_MORE if not self._is_expanded else ft.Icons.EXPAND_LESS, size=12, color=ft.Colors.BLUE_700),
+                            ft.Text("显示全部" if not self._is_expanded else "收起", size=11, color=ft.Colors.BLUE_600, weight=ft.FontWeight.W_500),
+                            ft.Icon(ft.Icons.EXPAND_MORE if not self._is_expanded else ft.Icons.EXPAND_LESS, size=14, color=ft.Colors.BLUE_600),
                         ], spacing=2, tight=True),
                         padding=4,
+                        bgcolor=ft.Colors.BLUE_50,
+                        border_radius=6
                     ),
                     on_tap=self._toggle_expand
                 )
@@ -108,32 +118,39 @@ class CommandCard(ft.Container):
 
         # 操作按钮行
         actions_row = ft.Row([
-            ft.IconButton(
-                icon=ft.Icons.CONTENT_COPY,
-                icon_size=14,
-                tooltip="复制",
-                on_click=lambda e: self.on_copy(self.command)
-            ),
-            ft.IconButton(
-                icon=ft.Icons.EDIT,
-                icon_size=14,
-                tooltip="编辑",
-                on_click=lambda e: self.on_edit(self.command)
-            ),
-            ft.IconButton(
-                icon=ft.Icons.STAR if self.command.is_favorite else ft.Icons.STAR_BORDER,
-                icon_color=ft.Colors.AMBER if self.command.is_favorite else None,
-                icon_size=14,
-                tooltip="取消收藏" if self.command.is_favorite else "收藏",
-                on_click=lambda e: self.on_toggle_favorite(self.command)
-            ),
-            ft.IconButton(
-                icon=ft.Icons.DELETE_OUTLINE,
-                icon_size=14,
-                tooltip="删除",
-                on_click=lambda e: self.on_delete(self.command)
+            ft.Container(
+                content=ft.Row([
+                    ft.IconButton(
+                        icon=ft.Icons.CONTENT_COPY,
+                        icon_size=16,
+                        tooltip="复制",
+                        on_click=lambda e: self.on_copy(self.command)
+                    ),
+                    ft.IconButton(
+                        icon=ft.Icons.EDIT_OUTLINED,
+                        icon_size=16,
+                        tooltip="编辑",
+                        on_click=lambda e: self.on_edit(self.command)
+                    ),
+                    ft.IconButton(
+                        icon=ft.Icons.STAR if self.command.is_favorite else ft.Icons.STAR_OUTLINE,
+                        icon_color=ft.Colors.AMBER if self.command.is_favorite else ft.Colors.GREY_500,
+                        icon_size=16,
+                        tooltip="取消收藏" if self.command.is_favorite else "收藏",
+                        on_click=lambda e: self.on_toggle_favorite(self.command)
+                    ),
+                    ft.IconButton(
+                        icon=ft.Icons.DELETE_OUTLINE,
+                        icon_size=16,
+                        tooltip="删除",
+                        on_click=lambda e: self.on_delete(self.command)
+                    )
+                ], spacing=0),
+                bgcolor=ft.Colors.GREY_50,
+                border_radius=8,
+                padding=2
             )
-        ], alignment=ft.MainAxisAlignment.END, spacing=0)
+        ], alignment=ft.MainAxisAlignment.END)
 
         # 构建内容列的子控件列表
         column_controls = [
