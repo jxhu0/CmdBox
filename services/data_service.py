@@ -154,6 +154,7 @@ class DataService:
                 c for c in results
                 if keyword in c.title.lower()
                 or keyword in c.content.lower()
+                or (c.description and keyword in c.description.lower())
                 or any(keyword in tag.lower() for tag in c.tags)
             ]
 
