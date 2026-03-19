@@ -159,8 +159,16 @@ class GitService:
         except Exception as e:
             return False, f"设置失败: {e}"
 
-    def sync(self) -> Tuple[bool, str]:
-        """同步：拉取 -> 提交 -> 推送"""
+    def sync(self, data_service=None) -> Tuple[bool, str]:
+        """同步：备份 -> 拉取 -> 提交 -> 推送"""
+        # 同步前先创建备份
+        if data_service:
+            try:
+                backup_path = data_service.backup()
+                print(f"已创建备份: {backup_path}")
+            except Exception as e:
+                print(f"备份失败: {e}")
+
         # 先拉取
         success, msg = self.pull()
         if not success:

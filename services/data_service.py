@@ -1,8 +1,10 @@
 # services/data_service.py
 import json
 import os
+import shutil
 from typing import List, Optional
 from pathlib import Path
+from datetime import datetime
 from models.board import Board
 from models.command import Command
 
@@ -13,6 +15,7 @@ class DataService:
     def __init__(self, data_path: str):
         self.data_path = Path(data_path)
         self.data_file = self.data_path / "data.json"
+        self.backup_dir = self.data_path / "backups"
         self.boards: List[Board] = []
         self.commands: List[Command] = []
 
@@ -39,6 +42,47 @@ class DataService:
 
         with open(self.data_file, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+
+    def backup(self) -> str:
+        """创建数据备份，返回备份文件路径"""
+        self.backup_dir.mkdir(parents=True, exist_ok=True)
+
+        # 生成带时间戳的备份文件名
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        backup_file = self.backup_dir / f"data_{timestamp}.json"
+
+        # 复制当前数据文件到备份目录
+        shutil.copy2(self.data_file, backup_file)
+
+        # 清理旧备份，只保留最近10个
+        self._cleanup_old_backups()
+
+        return str(backup_file)
+
+    def _cleanup_old_backups(self):
+        """清理旧备份，只保留最近10个"""
+        if not self.backup_dir.exists():
+            return
+
+        backups = sorted(self.backup_dir.glob("data_*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+        for old_backup in backups[10:]:
+            old_backup.unlink()
+
+    def get_backups(self) -> List[dict]:
+        """获取所有备份文件列表"""
+        if not self.backup_dir.exists():
+            return []
+
+        backups = []
+        for f in sorted(self.backup_dir.glob("data_*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+            stat = f.stat()
+            backups.append({
+                "path": str(f),
+                "name": f.name,
+                "size": stat.st_size,
+                "created": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+            })
+        return backups
 
     def _init_default_data(self):
         """初始化默认数据"""

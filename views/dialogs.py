@@ -5,6 +5,17 @@ from models.board import Board
 from models.command import Command
 
 
+# 预设图标列表
+BOARD_ICONS = [
+    "📁", "📂", "📃", "📄", "📅", "📆", "📇", "📈", "📉", "📊",
+    "📋", "📌", "📍", "📎", "📏", "📐", "📑", "📓", "📔", "📕",
+    "📖", "📗", "📘", "📙", "📚", "📛", "📜", "📝", "📞", "📟",
+    "💻", "🖥️", "🖱️", "⌨️", "📱", "📲", "☎️", "📠", "🔧", "🔨",
+    "🔩", "💡", "🔔", "🔑", "🗝️", "🔒", "🌐", "🌍", "🌎", "🌏",
+    "🗺️", "📡", "📶", "🔗", "🎯", "⭐", "💫", "✨", "⚡", "🔥"
+]
+
+
 class BoardDialog(ft.AlertDialog):
     """板块弹窗（新建/编辑）"""
 
@@ -17,6 +28,7 @@ class BoardDialog(ft.AlertDialog):
         super().__init__()
         self.board = board
         self.on_save_callback = on_save
+        self.selected_icon = board.icon if board else "📁"
 
         self.modal = True
         self.title = ft.Text(title)
@@ -27,21 +39,65 @@ class BoardDialog(ft.AlertDialog):
             autofocus=True
         )
 
-        self.icon_field = ft.TextField(
-            label="图标 (emoji)",
-            value=board.icon if board else "📁",
-            max_length=2
+        # 创建图标按钮
+        def make_icon_btn(icon):
+            btn = ft.Container(
+                content=ft.Text(icon, size=18),
+                width=32,
+                height=32,
+                alignment=ft.Alignment(0, 0),
+                border_radius=4,
+                on_click=self._on_icon_select,
+                data=icon
+            )
+            if icon == self.selected_icon:
+                btn.border = ft.border.all(2, ft.Colors.BLUE_400)
+                btn.bgcolor = ft.Colors.BLUE_50
+            return btn
+
+        self.icon_buttons = [make_icon_btn(icon) for icon in BOARD_ICONS]
+
+        self.icon_preview = ft.Container(
+            content=ft.Text(self.selected_icon, size=24),
+            width=50,
+            height=50,
+            alignment=ft.Alignment(0, 0),
+            border_radius=8,
+            border=ft.border.all(1, ft.Colors.GREY_300)
         )
 
         self.content = ft.Column([
             self.name_field,
-            self.icon_field
-        ], tight=True)
+            ft.Text("选择图标", size=12, color=ft.Colors.GREY_600),
+            ft.Container(
+                content=ft.Row(self.icon_buttons, wrap=True, spacing=2, run_spacing=2),
+                height=120
+            ),
+            ft.Row([
+                ft.Text("预览：", size=12),
+                self.icon_preview
+            ], alignment=ft.MainAxisAlignment.START)
+        ], tight=True, scroll=ft.ScrollMode.AUTO)
 
         self.actions = [
             ft.TextButton("取消", on_click=self._on_cancel),
             ft.TextButton("保存", on_click=self._on_save)
         ]
+
+    def _on_icon_select(self, e):
+        """选择图标"""
+        self.selected_icon = e.control.data
+        # 更新预览
+        self.icon_preview.content = ft.Text(self.selected_icon, size=24)
+        # 更新所有按钮的样式
+        for btn in self.icon_buttons:
+            if btn.data == self.selected_icon:
+                btn.border = ft.border.all(2, ft.Colors.BLUE_400)
+                btn.bgcolor = ft.Colors.BLUE_50
+            else:
+                btn.border = None
+                btn.bgcolor = None
+        self.page.update()
 
     def _on_cancel(self, e):
         if self.page:
@@ -50,7 +106,7 @@ class BoardDialog(ft.AlertDialog):
 
     def _on_save(self, e):
         if self.on_save_callback:
-            self.on_save_callback(self.name_field.value, self.icon_field.value)
+            self.on_save_callback(self.name_field.value, self.selected_icon)
         if self.page:
             self.page.pop_dialog()
             self.page.update()
@@ -234,10 +290,14 @@ class SettingsDialog(ft.AlertDialog):
         self,
         repo_path: str,
         remote_url: str,
-        on_save: Callable[[str], None] = None
+        data_service=None,
+        on_save: Callable[[str], None] = None,
+        on_restore: Callable[[str], None] = None
     ):
         super().__init__()
         self.on_save_callback = on_save
+        self.on_restore_callback = on_restore
+        self.data_service = data_service
 
         self.modal = True
         self.title = ft.Text("设置")
@@ -258,6 +318,10 @@ class SettingsDialog(ft.AlertDialog):
             expand=True
         )
 
+        # 备份列表
+        self.backup_list = ft.Column([], tight=True, scroll=ft.ScrollMode.AUTO)
+        self._refresh_backups()
+
         # 说明文字
         self.help_text = ft.Column([
             ft.Text("配置说明：", size=12, weight=ft.FontWeight.BOLD),
@@ -272,12 +336,49 @@ class SettingsDialog(ft.AlertDialog):
             self.remote_field,
             ft.Divider(height=10, color="transparent"),
             self.help_text,
+            ft.Divider(height=10, color="transparent"),
+            ft.Text("数据备份", size=12, weight=ft.FontWeight.BOLD),
+            ft.Text("同步前会自动创建备份，最多保留10个", size=10, color=ft.Colors.GREY_600),
+            self.backup_list,
         ], tight=True, scroll=ft.ScrollMode.AUTO)
 
         self.actions = [
             ft.TextButton("取消", on_click=self._on_cancel),
             ft.TextButton("保存", on_click=self._on_save)
         ]
+
+    def _refresh_backups(self):
+        """刷新备份列表"""
+        if not self.data_service:
+            return
+
+        backups = self.data_service.get_backups()
+        self.backup_list.controls.clear()
+
+        if not backups:
+            self.backup_list.controls.append(
+                ft.Text("暂无备份", size=11, color=ft.Colors.GREY_500)
+            )
+            return
+
+        for backup in backups[:5]:  # 只显示最近5个
+            row = ft.Row([
+                ft.Text(backup["name"], size=11, expand=True),
+                ft.Text(backup["created"], size=10, color=ft.Colors.GREY_500),
+                ft.TextButton(
+                    "恢复",
+                    on_click=lambda e, path=backup["path"]: self._on_restore(path)
+                )
+            ])
+            self.backup_list.controls.append(row)
+
+    def _on_restore(self, backup_path: str):
+        """恢复备份"""
+        if self.on_restore_callback:
+            self.on_restore_callback(backup_path)
+        if self.page:
+            self.page.pop_dialog()
+            self.page.update()
 
     def _on_cancel(self, e):
         if self.page:

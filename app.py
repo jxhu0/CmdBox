@@ -353,7 +353,7 @@ class CmdBoxApp:
                 return
 
             # 执行同步
-            success, msg = self.git_service.sync()
+            success, msg = self.git_service.sync(self.data_service)
 
             if success:
                 self.config_service.update_last_sync()
@@ -382,10 +382,27 @@ class CmdBoxApp:
             else:
                 self._show_snack_bar("远程地址已清除")
 
+        def on_restore(backup_path: str):
+            """从备份恢复数据"""
+            import shutil
+            # 备份当前数据
+            current_backup = self.data_service.data_file.with_suffix(".json.bak")
+            shutil.copy2(self.data_service.data_file, current_backup)
+            # 复制备份文件
+            shutil.copy2(backup_path, self.data_service.data_file)
+            # 重新加载数据
+            self.data_service.load()
+            # 刷新界面
+            self._refresh_sidebar()
+            self._refresh_commands()
+            self._show_snack_bar("数据已恢复（已备份当前数据）")
+
         dialog = SettingsDialog(
             repo_path=self.config_service.get("repo_path"),
             remote_url=current_remote_url,
-            on_save=on_save
+            data_service=self.data_service,
+            on_save=on_save,
+            on_restore=on_restore
         )
         self.page.show_dialog(dialog)
         self.page.update()
