@@ -12,6 +12,7 @@ from models.command import Command
 from views.sidebar import Sidebar
 from views.search_bar import SearchBar
 from views.command_list import CommandList
+from views.board_desc_card import BoardDescCard
 from views.dialogs import BoardDialog, CommandDialog, ConfirmDialog, EditAndCopyDialog, SettingsDialog
 from views.setup_wizard import create_setup_wizard
 
@@ -148,6 +149,12 @@ class CmdBoxApp:
             on_add_command=self._on_add_command
         )
 
+        # 板块描述卡片
+        self.board_desc_card = BoardDescCard(
+            board=None,
+            on_edit=self._on_edit_board_desc
+        )
+
         # 新建指令按钮
         self.add_btn = ft.FloatingActionButton(
             icon=ft.Icons.ADD,
@@ -155,11 +162,17 @@ class CmdBoxApp:
         )
 
         # 主内容区（搜索栏紧凑）
+        self.board_desc_container = ft.Container(
+            content=self.board_desc_card,
+            padding=ft.padding.only(left=5, right=5, top=4, bottom=0),
+            visible=False
+        )
         main_content = ft.Column([
             ft.Container(content=self.search_bar, padding=5),
             ft.Divider(height=1),
-            ft.Container(content=self.command_list, expand=True, padding=5)
-        ], expand=True)
+            self.board_desc_container,
+            ft.Container(content=self.command_list, expand=True, padding=ft.padding.only(left=5, right=5, top=4, bottom=5))
+        ], expand=True, spacing=0)
 
         # 布局（侧边栏宽度减小）
         layout = ft.Row([
@@ -207,6 +220,7 @@ class CmdBoxApp:
         self.search_board_ids = [board_id]
         self._refresh_commands()
         self._refresh_sidebar()
+        self._refresh_board_desc()
 
     def _on_search(self, keyword: str, board_ids: Optional[List[str]], tag: Optional[str] = None):
         """搜索"""
@@ -224,9 +238,9 @@ class CmdBoxApp:
 
     def _on_add_board(self):
         """添加板块"""
-        def on_save(name: str, icon: str):
+        def on_save(name: str, icon: str, description: str = ""):
             if name:
-                board = Board.create(name, icon)
+                board = Board.create(name, icon, description)
                 self.data_service.add_board(board)
                 self._refresh_sidebar()
             self.page.pop_dialog()
@@ -242,16 +256,43 @@ class CmdBoxApp:
         if not board:
             return
 
-        def on_save(name: str, icon: str):
+        def on_save(name: str, icon: str, description: str = ""):
             if name:
-                board.update(name=name, icon=icon)
+                board.update(name=name, icon=icon, description=description)
                 self.data_service.update_board(board)
                 self._refresh_sidebar()
+                self._refresh_board_desc()
             self.page.pop_dialog()
             self.page.update()
 
         dialog = BoardDialog("编辑板块", board=board, on_save=on_save)
         self.page.show_dialog(dialog)
+        self.page.update()
+
+    def _on_edit_board_desc(self, board: Board):
+        """编辑板块描述（从描述卡片）"""
+        def on_save(name: str, icon: str, description: str = ""):
+            if name:
+                board.update(name=name, icon=icon, description=description)
+                self.data_service.update_board(board)
+                self._refresh_sidebar()
+                self._refresh_board_desc()
+            self.page.pop_dialog()
+            self.page.update()
+
+        dialog = BoardDialog("编辑板块", board=board, on_save=on_save)
+        self.page.show_dialog(dialog)
+        self.page.update()
+
+    def _refresh_board_desc(self):
+        """刷新板块描述卡片"""
+        if self.selected_board_id:
+            board = self.data_service.get_board(self.selected_board_id)
+            self.board_desc_card.update_board(board)
+            self.board_desc_container.visible = bool(board and board.description)
+        else:
+            self.board_desc_card.update_board(None)
+            self.board_desc_container.visible = False
         self.page.update()
 
     def _on_delete_board(self, board_id: str):

@@ -23,7 +23,7 @@ class BoardDialog(ft.AlertDialog):
         self,
         title: str,
         board: Optional[Board] = None,
-        on_save: Callable[[str, str], None] = None
+        on_save: Callable[[str, str, str], None] = None
     ):
         super().__init__()
         self.board = board
@@ -37,6 +37,13 @@ class BoardDialog(ft.AlertDialog):
             label="板块名称",
             value=board.name if board else "",
             autofocus=True
+        )
+
+        self.desc_field = ft.TextField(
+            label="板块描述（可选）",
+            value=board.description if board else "",
+            multiline=True,
+            max_lines=3
         )
 
         # 创建图标按钮
@@ -68,6 +75,7 @@ class BoardDialog(ft.AlertDialog):
 
         self.content = ft.Column([
             self.name_field,
+            self.desc_field,
             ft.Text("选择图标", size=12, color=ft.Colors.GREY_600),
             ft.Container(
                 content=ft.Row(self.icon_buttons, wrap=True, spacing=2, run_spacing=2),
@@ -106,7 +114,7 @@ class BoardDialog(ft.AlertDialog):
 
     def _on_save(self, e):
         if self.on_save_callback:
-            self.on_save_callback(self.name_field.value, self.selected_icon)
+            self.on_save_callback(self.name_field.value, self.selected_icon, self.desc_field.value)
         if self.page:
             self.page.pop_dialog()
             self.page.update()
