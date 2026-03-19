@@ -155,7 +155,7 @@ class CmdBoxApp:
 
         # 布局（侧边栏宽度减小）
         layout = ft.Row([
-            ft.Container(content=self.sidebar, width=170),
+            ft.Container(content=self.sidebar, width=200),
             ft.VerticalDivider(width=1),
             ft.Container(content=main_content, expand=True)
         ], expand=True)

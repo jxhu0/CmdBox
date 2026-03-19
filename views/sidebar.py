@@ -24,7 +24,7 @@ class Sidebar(ft.Container):
         self.on_delete_board = on_delete_board
         self.selected_board_id = selected_board_id
 
-        self.width = 150
+        self.width = 180
         self.bgcolor = ft.Colors.GREY_100
         self.padding = 5
         self.content = self._build_content()
@@ -35,42 +35,51 @@ class Sidebar(ft.Container):
             is_selected = board.id == self.selected_board_id
             item = ft.Container(
                 content=ft.Row([
-                    ft.Text(board.icon, size=14),
-                    ft.Text(board.name, size=12, weight=ft.FontWeight.BOLD if is_selected else ft.FontWeight.NORMAL),
-                    ft.IconButton(
-                        icon=ft.Icons.EDIT,
-                        icon_size=9,
-                        tooltip="编辑板块",
-                        on_click=lambda e, bid=board.id: self.on_edit_board(bid)
-                    ),
-                    ft.IconButton(
-                        icon=ft.Icons.DELETE_OUTLINE,
-                        icon_size=9,
-                        tooltip="删除板块",
-                        on_click=lambda e, bid=board.id: self.on_delete_board(bid)
-                    )
-                ], spacing=1, tight=True),
-                padding=2,
-                border_radius=3,
-                bgcolor=ft.Colors.BLUE_50 if is_selected else None,
+                    ft.Text(board.icon, size=16),
+                    ft.Text(board.name, size=13, weight=ft.FontWeight.W_600 if is_selected else ft.FontWeight.NORMAL,
+                            color=ft.Colors.BLUE_700 if is_selected else ft.Colors.GREY_700),
+                    ft.Row([
+                        ft.IconButton(
+                            icon=ft.Icons.EDIT_OUTLINED,
+                            icon_size=12,
+                            tooltip="编辑板块",
+                            on_click=lambda e, bid=board.id: self.on_edit_board(bid)
+                        ),
+                        ft.IconButton(
+                            icon=ft.Icons.DELETE_OUTLINE,
+                            icon_size=12,
+                            tooltip="删除板块",
+                            on_click=lambda e, bid=board.id: self.on_delete_board(bid)
+                        )
+                    ], spacing=0)
+                ], spacing=4, tight=True),
+                padding=8,
+                border_radius=8,
+                bgcolor=ft.Colors.BLUE_50 if is_selected else ft.Colors.TRANSPARENT,
+                border=ft.border.only(left=ft.border.BorderSide(3, ft.Colors.BLUE_500)) if is_selected else None,
                 on_click=lambda e, bid=board.id: self.on_board_select(bid)
             )
             board_items.append(item)
 
         # 添加新建按钮
-        add_btn = ft.TextButton(
-            content=ft.Row([
-                ft.Icon(ft.Icons.ADD, size=12),
-                ft.Text("新建板块", size=11)
-            ]),
-            on_click=lambda e: self.on_add_board()
+        add_btn = ft.Container(
+            content=ft.TextButton(
+                content=ft.Row([
+                    ft.Icon(ft.Icons.ADD, size=14, color=ft.Colors.BLUE_600),
+                    ft.Text("新建板块", size=12, color=ft.Colors.BLUE_600)
+                ]),
+                on_click=lambda e: self.on_add_board()
+            ),
+            bgcolor=ft.Colors.BLUE_50,
+            border_radius=8,
+            padding=8
         )
 
         return ft.Column([
             ft.Text("板块", size=10, color=ft.Colors.GREY_500, weight=ft.FontWeight.BOLD),
             ft.Divider(height=3, color="transparent"),
             *board_items,
-            ft.Divider(height=5, color="transparent"),
+            ft.Divider(height=8, color="transparent"),
             add_btn
         ])
 
