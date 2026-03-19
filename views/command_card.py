@@ -72,7 +72,9 @@ class CommandCard(ft.Container):
         on_copy: Callable[[Command], None],
         on_edit: Callable[[Command], None],
         on_delete: Callable[[Command], None],
-        on_toggle_favorite: Callable[[Command], None]
+        on_toggle_favorite: Callable[[Command], None],
+        on_move_up: Callable[[Command], None] = None,
+        on_move_down: Callable[[Command], None] = None
     ):
         super().__init__()
         self.command = command
@@ -81,6 +83,8 @@ class CommandCard(ft.Container):
         self.on_edit = on_edit
         self.on_delete = on_delete
         self.on_toggle_favorite = on_toggle_favorite
+        self.on_move_up = on_move_up
+        self.on_move_down = on_move_down
 
         # 状态
         self._is_expanded = False
@@ -177,6 +181,18 @@ class CommandCard(ft.Container):
         actions_row = ft.Row([
             ft.Container(
                 content=ft.Row([
+                    ft.IconButton(
+                        icon=ft.Icons.KEYBOARD_ARROW_UP,
+                        icon_size=16,
+                        tooltip="上移",
+                        on_click=lambda e: self.on_move_up(self.command) if self.on_move_up else None
+                    ),
+                    ft.IconButton(
+                        icon=ft.Icons.KEYBOARD_ARROW_DOWN,
+                        icon_size=16,
+                        tooltip="下移",
+                        on_click=lambda e: self.on_move_down(self.command) if self.on_move_down else None
+                    ),
                     ft.IconButton(
                         icon=ft.Icons.CONTENT_COPY,
                         icon_size=16,

@@ -14,7 +14,8 @@ class Sidebar(ft.Container):
         on_add_board: Callable[[], None],
         on_edit_board: Callable[[str], None],
         on_delete_board: Callable[[str], None],
-        selected_board_id: Optional[str] = None
+        selected_board_id: Optional[str] = None,
+        favorites_board_id: Optional[str] = None
     ):
         super().__init__()
         self.boards = boards
@@ -23,6 +24,7 @@ class Sidebar(ft.Container):
         self.on_edit_board = on_edit_board
         self.on_delete_board = on_delete_board
         self.selected_board_id = selected_board_id
+        self.favorites_board_id = favorites_board_id
 
         self.width = 180
         self.bgcolor = ft.Colors.WHITE
@@ -30,7 +32,26 @@ class Sidebar(ft.Container):
         self.content = self._build_content()
 
     def _build_content(self) -> ft.Column:
-        board_items = []
+        items = []
+
+        # 收藏板块（固定在最上方）
+        if self.favorites_board_id:
+            is_selected = self.selected_board_id == self.favorites_board_id
+            fav_item = ft.Container(
+                content=ft.Row([
+                    ft.Icon(ft.Icons.STAR, size=16, color=ft.Colors.AMBER_600 if is_selected else ft.Colors.GREY_500),
+                    ft.Text("收藏", size=13, weight=ft.FontWeight.W_600 if is_selected else ft.FontWeight.NORMAL,
+                            color=ft.Colors.AMBER_700 if is_selected else ft.Colors.GREY_700),
+                ], spacing=4, tight=True),
+                padding=8,
+                border_radius=8,
+                bgcolor=ft.Colors.AMBER_50 if is_selected else ft.Colors.TRANSPARENT,
+                border=ft.border.only(left=ft.border.BorderSide(3, ft.Colors.AMBER_500)) if is_selected else None,
+                on_click=lambda e: self.on_board_select(self.favorites_board_id)
+            )
+            items.append(fav_item)
+
+        # 普通板块列表
         for board in self.boards:
             is_selected = board.id == self.selected_board_id
             item = ft.Container(
@@ -59,7 +80,7 @@ class Sidebar(ft.Container):
                 border=ft.border.only(left=ft.border.BorderSide(3, ft.Colors.BLUE_500)) if is_selected else None,
                 on_click=lambda e, bid=board.id: self.on_board_select(bid)
             )
-            board_items.append(item)
+            items.append(item)
 
         # 添加新建按钮
         add_btn = ft.Container(
@@ -78,13 +99,15 @@ class Sidebar(ft.Container):
         return ft.Column([
             ft.Text("板块", size=10, color=ft.Colors.GREY_500, weight=ft.FontWeight.BOLD),
             ft.Divider(height=3, color="transparent"),
-            *board_items,
+            *items,
             ft.Divider(height=8, color="transparent"),
             add_btn
         ])
 
-    def update_boards(self, boards: List[Board], selected_id: Optional[str] = None):
+    def update_boards(self, boards: List[Board], selected_id: Optional[str] = None, favorites_id: Optional[str] = None):
         self.boards = boards
         self.selected_board_id = selected_id
+        if favorites_id:
+            self.favorites_board_id = favorites_id
         self.content = self._build_content()
         self.update()

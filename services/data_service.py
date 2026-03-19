@@ -128,12 +128,34 @@ class DataService:
     def get_commands_by_board(self, board_id: str) -> List[Command]:
         return [c for c in self.commands if c.board_id == board_id]
 
+    def get_favorite_commands(self) -> List[Command]:
+        """获取所有收藏的指令"""
+        return [c for c in self.commands if c.is_favorite]
+
     def update_command(self, command: Command):
         self.save()
 
     def delete_command(self, command_id: str):
         self.commands = [c for c in self.commands if c.id != command_id]
         self.save()
+
+    def move_command_up(self, command_id: str):
+        """将指令上移一位"""
+        for i in range(1, len(self.commands)):
+            if self.commands[i].id == command_id:
+                self.commands[i - 1], self.commands[i] = self.commands[i], self.commands[i - 1]
+                self.save()
+                return True
+        return False
+
+    def move_command_down(self, command_id: str):
+        """将指令下移一位"""
+        for i in range(len(self.commands) - 1):
+            if self.commands[i].id == command_id:
+                self.commands[i], self.commands[i + 1] = self.commands[i + 1], self.commands[i]
+                self.save()
+                return True
+        return False
 
     def search_commands(
         self,
@@ -163,6 +185,7 @@ class DataService:
                 or any(keyword in t.lower() for t in c.tags)
             ]
 
-        # 收藏置顶，然后按更新时间降序
-        results.sort(key=lambda c: (c.is_favorite, c.updated_at or ""), reverse=True)
+        # 有关键词或标签筛选时按更新时间降序排序
+        if keyword or tag:
+            results.sort(key=lambda c: c.updated_at or "", reverse=True)
         return results

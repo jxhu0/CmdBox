@@ -16,7 +16,9 @@ class CommandList(ft.Column):
         on_edit: Callable[[Command], None],
         on_delete: Callable[[Command], None],
         on_toggle_favorite: Callable[[Command], None],
-        on_add_command: Callable[[], None]
+        on_add_command: Callable[[], None],
+        on_move_up: Callable[[Command], None] = None,
+        on_move_down: Callable[[Command], None] = None
     ):
         super().__init__()
         self.boards = boards
@@ -25,6 +27,8 @@ class CommandList(ft.Column):
         self.on_delete = on_delete
         self.on_toggle_favorite = on_toggle_favorite
         self.on_add_command = on_add_command
+        self.on_move_up = on_move_up
+        self.on_move_down = on_move_down
         self.commands: List[Command] = []
 
         self.expand = True
@@ -59,7 +63,9 @@ class CommandList(ft.Column):
                 on_copy=self.on_copy,
                 on_edit=self.on_edit,
                 on_delete=self.on_delete,
-                on_toggle_favorite=self.on_toggle_favorite
+                on_toggle_favorite=self.on_toggle_favorite,
+                on_move_up=self.on_move_up,
+                on_move_down=self.on_move_down
             )
             cards.append(card)
 

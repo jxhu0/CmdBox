@@ -35,6 +35,13 @@ class CmdBoxApp:
         self.search_keyword: str = ""
         self.search_board_ids: Optional[List[str]] = None
         self.search_tag: Optional[str] = None
+        self.show_favorites_only: bool = False  # 是否只显示收藏
+
+        # 收藏板块ID（虚拟板块，不存储在数据中）
+        self.FAVORITES_BOARD_ID = "__favorites__"
+
+        # 移动指令时的防重复点击标志
+        self._is_moving: bool = False
 
         # 检查是否已初始化
         config_path = Path.home() / ".cmdbox"
@@ -129,7 +136,8 @@ class CmdBoxApp:
             on_add_board=self._on_add_board,
             on_edit_board=self._on_edit_board,
             on_delete_board=self._on_delete_board,
-            selected_board_id=self.selected_board_id
+            selected_board_id=self.selected_board_id,
+            favorites_board_id=self.FAVORITES_BOARD_ID
         )
 
         # 搜索栏
@@ -146,7 +154,9 @@ class CmdBoxApp:
             on_edit=self._on_edit_command,
             on_delete=self._on_delete_command,
             on_toggle_favorite=self._on_toggle_favorite,
-            on_add_command=self._on_add_command
+            on_add_command=self._on_add_command,
+            on_move_up=self._on_move_up,
+            on_move_down=self._on_move_down
         )
 
         # 板块描述卡片
@@ -195,18 +205,23 @@ class CmdBoxApp:
 
     def _refresh_commands(self):
         """刷新指令列表"""
-        commands = self.data_service.search_commands(
-            self.search_keyword,
-            self.search_board_ids,
-            self.search_tag
-        )
+        if self.show_favorites_only:
+            # 收藏板块：显示所有收藏指令
+            commands = self.data_service.get_favorite_commands()
+        else:
+            commands = self.data_service.search_commands(
+                self.search_keyword,
+                self.search_board_ids,
+                self.search_tag
+            )
         self.command_list.update_commands(commands)
 
     def _refresh_sidebar(self):
         """刷新侧边栏"""
         self.sidebar.update_boards(
             self.data_service.boards,
-            self.selected_board_id
+            self.selected_board_id,
+            self.FAVORITES_BOARD_ID
         )
         self.search_bar.update_boards(self.data_service.boards)
         self.search_bar.update_tags(self._get_all_tags())
@@ -217,7 +232,13 @@ class CmdBoxApp:
     def _on_board_select(self, board_id: str):
         """选择板块"""
         self.selected_board_id = board_id
-        self.search_board_ids = [board_id]
+        if board_id == self.FAVORITES_BOARD_ID:
+            # 收藏板块
+            self.show_favorites_only = True
+            self.search_board_ids = None
+        else:
+            self.show_favorites_only = False
+            self.search_board_ids = [board_id]
         self._refresh_commands()
         self._refresh_sidebar()
         self._refresh_board_desc()
@@ -286,7 +307,11 @@ class CmdBoxApp:
 
     def _refresh_board_desc(self):
         """刷新板块描述卡片"""
-        if self.selected_board_id:
+        # 收藏板块不显示描述卡片
+        if self.selected_board_id == self.FAVORITES_BOARD_ID:
+            self.board_desc_card.update_board(None)
+            self.board_desc_container.visible = False
+        elif self.selected_board_id:
             board = self.data_service.get_board(self.selected_board_id)
             self.board_desc_card.update_board(board)
             self.board_desc_container.visible = bool(board and board.description)
@@ -399,6 +424,38 @@ class CmdBoxApp:
         command.update(is_favorite=not command.is_favorite)
         self.data_service.update_command(command)
         self._refresh_commands()
+
+    def _on_move_up(self, command: Command):
+        """上移指令"""
+        if self._is_moving:
+            return
+        self._is_moving = True
+        self.data_service.move_command_up(command.id)
+        # 直接获取筛选后的命令列表并刷新显示
+        commands = self.data_service.search_commands(
+            self.search_keyword,
+            self.search_board_ids,
+            self.search_tag
+        )
+        self.command_list.update_commands(commands)
+        self.page.update()
+        self._is_moving = False
+
+    def _on_move_down(self, command: Command):
+        """下移指令"""
+        if self._is_moving:
+            return
+        self._is_moving = True
+        self.data_service.move_command_down(command.id)
+        # 直接获取筛选后的命令列表并刷新显示
+        commands = self.data_service.search_commands(
+            self.search_keyword,
+            self.search_board_ids,
+            self.search_tag
+        )
+        self.command_list.update_commands(commands)
+        self.page.update()
+        self._is_moving = False
 
     def _on_sync(self, e):
         """同步"""
