@@ -1,4 +1,6 @@
 # app.py
+__version__ = "1.0.0"
+
 import flet as ft
 from pathlib import Path
 from typing import Optional, List, Dict
