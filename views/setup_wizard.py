@@ -2,29 +2,38 @@
 import flet as ft
 from pathlib import Path
 from typing import Callable
+import tkinter as tk
+from tkinter import filedialog
 
 
 def create_setup_wizard(page: ft.Page, on_complete: Callable[[str], None]) -> ft.Container:
     """创建首次启动向导"""
-    path_value = str(Path.home() / "cmdbox-data")
+    path_data = {"path": str(Path.home() / "cmdbox-data")}
 
     def on_path_change(e):
-        nonlocal path_value
-        path_value = e.control.value
+        path_data["path"] = e.control.value
 
     def on_browse(e):
-        # Flet 不支持原生文件对话框
-        path_input.focus()
+        # 使用 tkinter 原生文件夹选择对话框
+        root = tk.Tk()
+        root.withdraw()  # 隐藏主窗口
+        root.attributes('-topmost', True)  # 置顶
+        folder = filedialog.askdirectory(initialdir=path_data["path"])
+        root.destroy()
+        if folder:
+            path_input.value = folder
+            path_input.update()
+            path_data["path"] = folder
 
     def on_start(e):
-        path = path_value.strip()
+        path = path_data["path"].strip()
         if path:
             on_complete(path)
 
     path_input = ft.TextField(
         hint_text="选择或输入目录路径",
         width=400,
-        value=path_value,
+        value=path_data["path"],
         on_change=on_path_change
     )
 
