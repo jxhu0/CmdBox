@@ -587,21 +587,41 @@ class CmdBoxApp:
         if not filename.endswith(ext):
             filename += ext
 
-        # 使用 macOS 原生文件保存对话框
-        import subprocess
+        # 使用跨平台文件保存对话框
         import threading
+        import platform
 
         result = [None]  # 用于在线程间传递结果
 
         def run_dialog():
-            script = f'''
-            set thePath to POSIX path of (choose file name default name "{filename}" with prompt "保存导出文件")
-            '''
-            try:
-                proc = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
-                result[0] = proc.stdout.strip() if proc.returncode == 0 else None
-            except:
-                result[0] = None
+            system = platform.system()
+            if system == "Darwin":  # macOS
+                import subprocess
+                script = f'''
+set thePath to POSIX path of (choose file name default name "{filename}" with prompt "保存导出文件")
+'''
+                try:
+                    proc = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
+                    result[0] = proc.stdout.strip() if proc.returncode == 0 else None
+                except:
+                    result[0] = None
+            else:  # Windows / Linux
+                import tkinter as tk
+                from tkinter import filedialog
+                root = tk.Tk()
+                root.withdraw()
+                root.attributes('-topmost', True)
+                root.update()
+                try:
+                    ext = ".json" if fmt == "json" else ".csv"
+                    path = filedialog.asksaveasfilename(
+                        initialfile=filename,
+                        defaultextension=ext,
+                        filetypes=[("JSON files", "*.json"), ("CSV files", "*.csv"), ("All files", "*.*")]
+                    )
+                    result[0] = path if path else None
+                finally:
+                    root.destroy()
 
         # 在新线程中运行对话框
         thread = threading.Thread(target=run_dialog)
