@@ -134,7 +134,7 @@ class CmdBoxApp:
         self.header = ft.Container(
             content=ft.Row([
                 self.logo,
-                ft.Container(content=self.search_bar, expand=True, padding=ft.padding.symmetric(horizontal=30)),
+                ft.Container(content=self.search_bar, expand=True, padding=ft.padding.only(left=10, right=10)),
                 ft.Row([
                     ft.IconButton(
                         icon=ft.Icons.DOWNLOAD,
