@@ -553,23 +553,19 @@ class CmdBoxApp:
         if not filename.endswith(ext):
             filename += ext
 
-        # 使用 tkinter 文件对话框
-        import tkinter as tk
-        from tkinter import filedialog
+        # 使用 macOS 原生文件保存对话框
+        import subprocess
 
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes('-topmost', True)
+        # 获取用户选择的路径
+        script = f'''
+        set thePath to POSIX path of (choose file name default name "{filename}" with prompt "保存导出文件")
+        '''
 
-        path = filedialog.asksaveasfilename(
-            title="保存导出文件",
-            initialfile=filename,
-            defaultextension=ext,
-            filetypes=[(f"{fmt.upper()} files", f"*{ext}"), ("All files", "*.*")]
-        )
-
-        root.quit()  # 退出 tkinter 事件循环
-        root.destroy()
+        try:
+            result = subprocess.run(['osascript', '-e', script], capture_output=True, text=True, timeout=10)
+            path = result.stdout.strip() if result.returncode == 0 else None
+        except:
+            path = None
 
         if path:
             try:
