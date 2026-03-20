@@ -37,19 +37,11 @@ jobs:
         run: |
           flet pack main.py -n CmdBox
 
-      - name: Create artifact
+      - name: Create zip for macOS
         if: matrix.os == 'macos-latest'
         run: |
           cd dist
           zip -r CmdBox.zip CmdBox.app
-          ls -la
-
-      - name: Create artifact
-        if: matrix.os == 'windows-latest'
-        run: |
-          cd dist
-          ls -la
-          dir
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -71,13 +63,10 @@ jobs:
         with:
           path: artifacts/
 
-      - name: Display structure
-        run: ls -laR artifacts/
-
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: artifacts/**/*.zip artifacts/**/CmdBox.exe artifacts/**/CmdBox.app 2>/dev/null || true
-          drafts: false
+          files: artifacts/**/*.zip artifacts/**/CmdBox.exe artifacts/**/CmdBox/ 2>/dev/null || true
+          draft: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
