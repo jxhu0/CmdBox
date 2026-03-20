@@ -30,7 +30,8 @@ class ExportDialog(ft.AlertDialog):
             content=ft.Column([
                 ft.Radio(value="json", label="JSON (.json)"),
                 ft.Radio(value="csv", label="CSV (.csv)"),
-            ])
+            ]),
+            on_change=self._on_format_change
         )
         self.format_group.value = "json"
 
@@ -63,6 +64,12 @@ class ExportDialog(ft.AlertDialog):
         """文件名变化时自动更新扩展名"""
         ext = ".json" if self.format_group.value == "json" else ".csv"
         self.filename_field.suffix = ft.Text(ext)
+
+    def _on_format_change(self, e):
+        """格式变化时更新文件扩展名"""
+        ext = ".json" if self.format_group.value == "json" else ".csv"
+        self.filename_field.suffix = ft.Text(ext)
+        self.update()
 
     def _on_cancel(self, e):
         self.open = False
