@@ -540,13 +540,24 @@ class CmdBoxApp:
 
     def _on_export_confirmed(self, scope: str, fmt: str, filename: str):
         """确认导出"""
-        # 确定板块 ID
+        # 确定板块 ID 和计数方式
         board_id = None
-        if scope == "current":
-            board_id = self.selected_board_id
+        is_favorites = self.show_favorites_only
 
-        # 获取导出数据
-        data = self.data_service.export_commands(board_id=board_id, format=fmt)
+        if scope == "current":
+            if is_favorites:
+                # 收藏板块：导出收藏的指令
+                commands = [c for c in self.data_service.commands if c.is_favorite]
+                data = self.data_service.export_commands_list(commands, fmt)
+                count = len(commands)
+            else:
+                board_id = self.selected_board_id
+                data = self.data_service.export_commands(board_id=board_id, format=fmt)
+                count = len([c for c in self.data_service.commands if c.board_id == board_id])
+        else:
+            # 所有板块
+            data = self.data_service.export_commands(board_id=None, format=fmt)
+            count = len(self.data_service.commands)
 
         # 添加文件扩展名
         ext = ".json" if fmt == "json" else ".csv"

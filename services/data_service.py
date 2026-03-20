@@ -258,3 +258,19 @@ class DataService:
             ])
 
         return output.getvalue()
+
+    def export_commands_list(self, commands: List[Command], format: str = "json") -> str:
+        """直接导出一批指令（不通过 board_id 过滤）
+
+        Args:
+            commands: 要导出的指令列表
+            format: "json" 或 "csv"
+
+        Returns:
+            序列化后的字符串
+        """
+        board_names = {b.id: b.name for b in self.boards}
+        if format == "json":
+            return self._export_as_json(commands, board_names)
+        else:
+            return self._export_as_csv(commands, board_names)
