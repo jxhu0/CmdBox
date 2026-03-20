@@ -402,16 +402,15 @@ class CmdBoxApp:
         self.page.overlay.append(toast)
         self.page.update()
 
-        # 2秒后移除
-        def remove_toast():
-            import time
-            time.sleep(2)
+        # 使用 page.run_task 延迟移除
+        async def remove_toast():
+            import asyncio
+            await asyncio.sleep(2)
             if toast in self.page.overlay:
                 self.page.overlay.remove(toast)
                 self.page.update()
 
-        import threading
-        threading.Thread(target=remove_toast, daemon=True).start()
+        self.page.run_task(remove_toast)
 
     def _on_edit_command(self, command: Command):
         """编辑指令"""
