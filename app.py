@@ -555,17 +555,25 @@ class CmdBoxApp:
 
         # 使用 macOS 原生文件保存对话框
         import subprocess
+        import threading
 
-        # 获取用户选择的路径
-        script = f'''
-        set thePath to POSIX path of (choose file name default name "{filename}" with prompt "保存导出文件")
-        '''
+        result = [None]  # 用于在线程间传递结果
 
-        try:
-            result = subprocess.run(['osascript', '-e', script], capture_output=True, text=True, timeout=10)
-            path = result.stdout.strip() if result.returncode == 0 else None
-        except:
-            path = None
+        def run_dialog():
+            script = f'''
+            set thePath to POSIX path of (choose file name default name "{filename}" with prompt "保存导出文件")
+            '''
+            try:
+                proc = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
+                result[0] = proc.stdout.strip() if proc.returncode == 0 else None
+            except:
+                result[0] = None
+
+        # 在新线程中运行对话框
+        thread = threading.Thread(target=run_dialog)
+        thread.start()
+        thread.join()  # 等待用户选择
+        path = result[0]
 
         if path:
             try:
