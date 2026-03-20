@@ -102,13 +102,21 @@ class CmdBoxApp:
         # 获取板块字典
         boards_dict = {b.id: b for b in self.data_service.boards}
 
+        # 搜索栏（先创建，供顶部栏使用）
+        self.search_bar = SearchBar(
+            boards=self.data_service.boards,
+            tags=self._get_all_tags(),
+            on_search=self._on_search
+        )
+
         # 顶部栏（简洁现代风格）
         self.header = ft.Container(
             content=ft.Row([
                 ft.Row([
                     ft.Icon(ft.Icons.TERMINAL, size=18, color=ft.Colors.BLUE_600),
                     ft.Text("CmdBox", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.GREY_800),
-                ]),
+                ], spacing=8, tight=True),
+                ft.Container(content=self.search_bar, expand=True, padding=ft.padding.symmetric(horizontal=20)),
                 ft.Row([
                     ft.IconButton(
                         icon=ft.Icons.SYNC,
@@ -123,8 +131,8 @@ class CmdBoxApp:
                         on_click=self._on_settings
                     )
                 ], spacing=0)
-            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-            padding=8,
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, tight=False),
+            padding=ft.padding.symmetric(horizontal=12, vertical=8),
             bgcolor=ft.Colors.WHITE,
             border=ft.border.only(bottom=ft.border.BorderSide(1, ft.Colors.GREY_200))
         )
@@ -138,13 +146,6 @@ class CmdBoxApp:
             on_delete_board=self._on_delete_board,
             selected_board_id=self.selected_board_id,
             favorites_board_id=self.FAVORITES_BOARD_ID
-        )
-
-        # 搜索栏
-        self.search_bar = SearchBar(
-            boards=self.data_service.boards,
-            tags=self._get_all_tags(),
-            on_search=self._on_search
         )
 
         # 指令列表
@@ -171,15 +172,13 @@ class CmdBoxApp:
             on_click=lambda e: self._on_add_command()
         )
 
-        # 主内容区（搜索栏紧凑）
+        # 主内容区
         self.board_desc_container = ft.Container(
             content=self.board_desc_card,
             padding=ft.padding.only(left=5, right=5, top=4, bottom=0),
             visible=False
         )
         main_content = ft.Column([
-            ft.Container(content=self.search_bar, padding=5),
-            ft.Divider(height=1),
             self.board_desc_container,
             ft.Container(content=self.command_list, expand=True, padding=ft.padding.only(left=5, right=5, top=4, bottom=5))
         ], expand=True, spacing=0)
