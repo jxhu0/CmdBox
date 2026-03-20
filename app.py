@@ -9,6 +9,7 @@ from services.config_service import ConfigService
 from services.data_service import DataService
 from services.git_service import GitService
 from services.clipboard_service import ClipboardService
+from services.update_service import UpdateService
 from models.board import Board
 from models.command import Command
 from views.sidebar import Sidebar
@@ -18,6 +19,7 @@ from views.board_desc_card import BoardDescCard
 from views.dialogs import BoardDialog, CommandDialog, ConfirmDialog, EditAndCopyDialog, SettingsDialog
 from views.export_dialog import ExportDialog
 from views.setup_wizard import create_setup_wizard
+from views.update_dialog import UpdateDialog
 
 
 class CmdBoxApp:
@@ -97,6 +99,26 @@ class CmdBoxApp:
 
         # 构建界面
         self._build_ui()
+
+        # 异步检查更新（不阻塞 UI）
+        self._check_for_updates()
+
+    def _check_for_updates(self):
+        """异步检查更新"""
+        import threading
+
+        def check():
+            has_update, latest_ver, notes = UpdateService.check_for_updates()
+            if has_update:
+                # 在主线程中显示对话框
+                def show_dialog():
+                    dialog = UpdateDialog(latest_ver, notes or "")
+                    self.page.show_dialog(dialog)
+
+                self.page.run_task(lambda e: show_dialog())
+
+        thread = threading.Thread(target=check)
+        thread.start()
 
     def _build_ui(self):
         """构建界面"""
