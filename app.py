@@ -553,17 +553,19 @@ class CmdBoxApp:
         if not filename.endswith(ext):
             filename += ext
 
-        def on_file_selected(e):
-            # 获取选择的文件路径
-            path = None
-            if hasattr(e, 'path') and e.path:
-                path = e.path
-            elif hasattr(e, 'files') and e.files:
-                path = e.files[0].path
+        # 使用 async 方式调用 FilePicker
+        async def do_save():
+            file_picker = ft.FilePicker()
+            self.page.overlay.append(file_picker)
+            self.page.update()
+
+            path = await file_picker.save_file(
+                dialog_title="保存导出文件",
+                file_name=filename,
+            )
 
             if path:
                 try:
-                    # 如果文件存在则直接覆盖
                     with open(path, "w", encoding="utf-8") as f:
                         f.write(data)
 
@@ -577,9 +579,7 @@ class CmdBoxApp:
                     self._show_snack_bar(f"导出失败：{str(ex)}")
             self.page.update()
 
-        file_picker = ft.FilePicker(on_result=on_file_selected)
-        self.page.overlay.append(file_picker)
-        self.page.update()
+        self.page.run_task(do_save)
         file_picker.save_file(
             dialog_title="保存导出文件",
             file_name=filename,
