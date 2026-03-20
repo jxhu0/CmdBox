@@ -558,8 +558,8 @@ class CmdBoxApp:
         from tkinter import filedialog
 
         root = tk.Tk()
-        root.withdraw()  # 隐藏主窗口
-        root.attributes('-topmost', True)  # 置顶
+        root.withdraw()
+        root.attributes('-topmost', True)
 
         path = filedialog.asksaveasfilename(
             title="保存导出文件",
@@ -567,6 +567,8 @@ class CmdBoxApp:
             defaultextension=ext,
             filetypes=[(f"{fmt.upper()} files", f"*{ext}"), ("All files", "*.*")]
         )
+
+        root.quit()  # 退出 tkinter 事件循环
         root.destroy()
 
         if path:
