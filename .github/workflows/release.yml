@@ -1,0 +1,83 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            platform: macos
+            artifact_name: CmdBox-macos
+          - os: windows-latest
+            platform: windows
+            artifact_name: CmdBox-windows
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install flet-cli pyinstaller
+
+      - name: Build ${{ matrix.platform }}
+        run: |
+          flet pack main.py -n CmdBox
+
+      - name: Create artifact
+        if: matrix.os == 'macos-latest'
+        run: |
+          cd dist
+          zip -r CmdBox.zip CmdBox.app
+          ls -la
+
+      - name: Create artifact
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd dist
+          ls -la
+          dir
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Display structure
+        run: ls -laR artifacts/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifacts/**/*.zip artifacts/**/CmdBox.exe artifacts/**/CmdBox.app 2>/dev/null || true
+          drafts: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
