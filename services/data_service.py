@@ -189,3 +189,72 @@ class DataService:
         if keyword or tag:
             results.sort(key=lambda c: c.updated_at or "", reverse=True)
         return results
+
+    def export_commands(self, board_id: Optional[str] = None, format: str = "json") -> str:
+        """导出指令为 JSON 或 CSV 格式
+
+        Args:
+            board_id: 若指定，则只导出该板块的指令；若为 None，则导出所有
+            format: "json" 或 "csv"
+
+        Returns:
+            序列化后的字符串
+        """
+        # 获取要导出的指令
+        if board_id:
+            commands = [c for c in self.commands if c.board_id == board_id]
+        else:
+            commands = self.commands
+
+        # 获取板块名称映射
+        board_names = {b.id: b.name for b in self.boards}
+
+        if format == "json":
+            return self._export_as_json(commands, board_names)
+        else:
+            return self._export_as_csv(commands, board_names)
+
+    def _export_as_json(self, commands: List[Command], board_names: dict) -> str:
+        """导出为 JSON 格式"""
+        export_data = {
+            "export_date": datetime.now().strftime("%Y-%m-%d"),
+            "commands": []
+        }
+        for c in commands:
+            export_data["commands"].append({
+                "title": c.title,
+                "description": c.description,
+                "content": c.content,
+                "board": board_names.get(c.board_id, ""),
+                "tags": c.tags,
+                "is_favorite": c.is_favorite,
+                "created_at": c.created_at,
+                "updated_at": c.updated_at
+            })
+        return json.dumps(export_data, ensure_ascii=False, indent=2)
+
+    def _export_as_csv(self, commands: List[Command], board_names: dict) -> str:
+        """导出为 CSV 格式（UTF-8 BOM）"""
+        import csv
+        import io
+
+        output = io.StringIO()
+        # UTF-8 BOM for Excel compatibility
+        output.write("\ufeff")
+
+        writer = csv.writer(output, quoting=csv.QUOTE_ALL)
+        writer.writerow(["title", "description", "content", "board", "tags", "is_favorite", "created_at", "updated_at"])
+
+        for c in commands:
+            writer.writerow([
+                c.title,
+                c.description,
+                c.content,
+                board_names.get(c.board_id, ""),
+                ",".join(c.tags) if c.tags else "",
+                1 if c.is_favorite else 0,
+                c.created_at,
+                c.updated_at
+            ])
+
+        return output.getvalue()
