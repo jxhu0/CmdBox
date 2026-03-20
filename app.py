@@ -108,7 +108,7 @@ class CmdBoxApp:
         import threading
 
         def check():
-            has_update, latest_ver, notes = UpdateService.check_for_updates()
+            has_update, latest_ver, notes = UpdateService.check_for_updates(__version__)
             if has_update:
                 # 在主线程中显示对话框
                 def show_dialog():

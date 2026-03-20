@@ -2,8 +2,6 @@
 import requests
 from typing import Optional, Tuple
 
-__version__ = "1.0.0"
-
 GITHUB_REPO = "jxhu0/CmdBox"
 API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
@@ -12,8 +10,11 @@ class UpdateService:
     """检查更新的服务"""
 
     @staticmethod
-    def check_for_updates() -> Tuple[bool, Optional[str], Optional[str]]:
+    def check_for_updates(current_version: str) -> Tuple[bool, Optional[str], Optional[str]]:
         """检查是否有新版本
+
+        Args:
+            current_version: 当前版本号，如 "1.0.0"
 
         Returns:
             Tuple[有新版本, 最新版本号, 更新说明]
@@ -31,9 +32,8 @@ class UpdateService:
 
             # 去除 tag_name 的 'v' 前缀进行比较
             latest_ver = latest_version.lstrip("v")
-            current_ver = __version__
 
-            if latest_ver != current_ver:
+            if latest_ver != current_version:
                 return True, latest_version, release_notes
             return False, None, None
         except Exception:
