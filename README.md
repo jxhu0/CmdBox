@@ -11,6 +11,7 @@
 - 🏷️ 标签系统
 - 🔄 Git 仓库同步
 - 📋 一键复制到剪贴板
+- 📤 批量导出（JSON/CSV）
 
 ## 安装
 
@@ -21,12 +22,12 @@ pip install -r requirements.txt
 ## 运行
 
 ```bash
-python main.py
+python3 main.py
 ```
 
 ## 技术栈
 
 - Python 3.10+
-- Flet (UI 框架)
+- Flet 0.82.2 (UI 框架)
 - GitPython (Git 操作)
 - pyperclip (剪贴板)
