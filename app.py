@@ -542,7 +542,7 @@ class CmdBoxApp:
         """确认导出"""
         # 确定板块 ID 和计数方式
         board_id = None
-        is_favorites = self.show_favorites_only
+        is_favorites = self.show_favorites_only and self.selected_board_id == self.FAVORITES_BOARD_ID
 
         if scope == "current":
             if is_favorites:
