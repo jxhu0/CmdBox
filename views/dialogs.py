@@ -1,8 +1,48 @@
 # views/dialogs.py
 import flet as ft
+import subprocess
+import platform
 from typing import List, Optional, Callable
 from models.board import Board
 from models.command import Command
+
+
+def _browse_folder(initial_dir: str) -> Optional[str]:
+    """跨平台选择文件夹"""
+    system = platform.system()
+
+    if system == "Darwin":  # macOS
+        escaped_path = initial_dir.replace('"', '\\"')
+        script = f'''
+set targetFolder to POSIX file "{escaped_path}"
+set chosen to choose folder with prompt "选择数据存储文件夹" default location targetFolder
+return POSIX path of chosen
+'''
+        try:
+            result = subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        except (subprocess.TimeoutExpired, Exception):
+            pass
+        return None
+
+    else:  # Windows / Linux - 使用 tkinter
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        root.update()
+        try:
+            folder = filedialog.askdirectory(initialdir=initial_dir)
+        finally:
+            root.destroy()
+        return folder if folder else None
 
 
 # 预设图标列表
@@ -300,22 +340,44 @@ class SettingsDialog(ft.AlertDialog):
         remote_url: str,
         data_service=None,
         on_save: Callable[[str], None] = None,
-        on_restore: Callable[[str], None] = None
+        on_restore: Callable[[str], None] = None,
+        on_path_save: Callable[[str], None] = None
     ):
         super().__init__()
         self.on_save_callback = on_save
         self.on_restore_callback = on_restore
+        self.on_path_save_callback = on_path_save
         self.data_service = data_service
+        self.path_data = {"path": repo_path}
 
         self.modal = True
-        self.title = ft.Text("设置")
+        self.title = ft.Container(
+            content=ft.Row([
+                ft.Text("设置", weight=ft.FontWeight.BOLD),
+                ft.Container(expand=True),
+                ft.IconButton(
+                    icon=ft.Icons.CLOSE,
+                    icon_size=18,
+                    tooltip="关闭",
+                    on_click=self._on_cancel,
+                    style=ft.ButtonStyle(color=ft.Colors.GREY_500)
+                )
+            ], alignment=ft.MainAxisAlignment.START),
+            padding=ft.padding.only(right=5)
+        )
 
-        # 数据路径（只读显示）
+        # 数据路径（可编辑）
         self.path_field = ft.TextField(
             label="数据存储路径",
             value=repo_path,
-            read_only=True,
-            border_color=ft.Colors.GREY_400
+            on_change=self._on_path_change
+        )
+
+        # 浏览按钮
+        self.browse_btn = ft.IconButton(
+            icon=ft.Icons.FOLDER_OPEN,
+            tooltip="浏览",
+            on_click=self._on_browse
         )
 
         # 远程仓库地址
@@ -339,7 +401,7 @@ class SettingsDialog(ft.AlertDialog):
         ], spacing=2)
 
         self.content = ft.Column([
-            self.path_field,
+            ft.Row([self.path_field, self.browse_btn], alignment=ft.MainAxisAlignment.START),
             ft.Divider(height=10, color="transparent"),
             self.remote_field,
             ft.Divider(height=10, color="transparent"),
@@ -354,6 +416,18 @@ class SettingsDialog(ft.AlertDialog):
             ft.TextButton("取消", on_click=self._on_cancel),
             ft.TextButton("保存", on_click=self._on_save)
         ]
+
+    def _on_browse(self, e):
+        """浏览选择新路径"""
+        folder = _browse_folder(self.path_data["path"])
+        if folder:
+            self.path_field.value = folder
+            self.path_field.update()
+            self.path_data["path"] = folder
+
+    def _on_path_change(self, e):
+        """路径文本变化"""
+        self.path_data["path"] = e.control.value
 
     def _refresh_backups(self):
         """刷新备份列表"""
@@ -394,8 +468,11 @@ class SettingsDialog(ft.AlertDialog):
             self.page.update()
 
     def _on_save(self, e):
+        new_path = self.path_data["path"].strip()
         if self.on_save_callback:
             self.on_save_callback(self.remote_field.value)
+        if self.on_path_save_callback and new_path:
+            self.on_path_save_callback(new_path)
         if self.page:
             self.page.pop_dialog()
             self.page.update()

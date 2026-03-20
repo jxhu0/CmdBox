@@ -653,12 +653,20 @@ class CmdBoxApp:
             self._refresh_commands()
             self._show_snack_bar("数据已恢复（已备份当前数据）")
 
+        def on_path_save(new_path: str):
+            """保存新的数据存储路径"""
+            old_path = self.config_service.get("repo_path")
+            if new_path != old_path:
+                self.config_service.set("repo_path", new_path)
+                self._show_snack_bar("数据存储路径已更改，请重启应用生效")
+
         dialog = SettingsDialog(
             repo_path=self.config_service.get("repo_path"),
             remote_url=current_remote_url,
             data_service=self.data_service,
             on_save=on_save,
-            on_restore=on_restore
+            on_restore=on_restore,
+            on_path_save=on_path_save
         )
         self.page.show_dialog(dialog)
         self.page.update()

@@ -1,9 +1,47 @@
 # views/setup_wizard.py
 import flet as ft
+import subprocess
+import platform
 from pathlib import Path
 from typing import Callable
-import tkinter as tk
-from tkinter import filedialog
+
+
+def _browse_folder(initial_dir: str) -> str:
+    """跨平台选择文件夹"""
+    system = platform.system()
+
+    if system == "Darwin":  # macOS
+        escaped_path = initial_dir.replace('"', '\\"')
+        script = f'''
+set targetFolder to POSIX file "{escaped_path}"
+set chosen to choose folder with prompt "选择数据存储文件夹" default location targetFolder
+return POSIX path of chosen
+'''
+        try:
+            result = subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        except (subprocess.TimeoutExpired, Exception):
+            pass
+        return ""
+
+    else:  # Windows / Linux - 使用 tkinter
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        root.update()
+        try:
+            folder = filedialog.askdirectory(initialdir=initial_dir)
+        finally:
+            root.destroy()
+        return folder if folder else ""
 
 
 def create_setup_wizard(page: ft.Page, on_complete: Callable[[str], None]) -> ft.Container:
@@ -14,12 +52,7 @@ def create_setup_wizard(page: ft.Page, on_complete: Callable[[str], None]) -> ft
         path_data["path"] = e.control.value
 
     def on_browse(e):
-        # 使用 tkinter 原生文件夹选择对话框
-        root = tk.Tk()
-        root.withdraw()  # 隐藏主窗口
-        root.attributes('-topmost', True)  # 置顶
-        folder = filedialog.askdirectory(initialdir=path_data["path"])
-        root.destroy()
+        folder = _browse_folder(path_data["path"])
         if folder:
             path_input.value = folder
             path_input.update()
