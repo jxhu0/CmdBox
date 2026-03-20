@@ -553,32 +553,36 @@ class CmdBoxApp:
         if not filename.endswith(ext):
             filename += ext
 
-        # 使用 async 方式调用 FilePicker
-        async def do_save():
-            file_picker = ft.FilePicker()
-            self.page.add(file_picker)
+        # 使用 tkinter 文件对话框
+        import tkinter as tk
+        from tkinter import filedialog
 
-            path = await file_picker.save_file(
-                dialog_title="保存导出文件",
-                file_name=filename,
-            )
+        root = tk.Tk()
+        root.withdraw()  # 隐藏主窗口
+        root.attributes('-topmost', True)  # 置顶
 
-            if path:
-                try:
-                    with open(path, "w", encoding="utf-8") as f:
-                        f.write(data)
+        path = filedialog.asksaveasfilename(
+            title="保存导出文件",
+            initialfile=filename,
+            defaultextension=ext,
+            filetypes=[(f"{fmt.upper()} files", f"*{ext}"), ("All files", "*.*")]
+        )
+        root.destroy()
 
-                    # 显示成功提示
-                    if board_id:
-                        count = len([c for c in self.data_service.commands if c.board_id == board_id])
-                    else:
-                        count = len(self.data_service.commands)
-                    self._show_snack_bar(f"导出成功，共 {count} 条指令")
-                except Exception as ex:
-                    self._show_snack_bar(f"导出失败：{str(ex)}")
-            self.page.update()
+        if path:
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(data)
 
-        self.page.run_task(do_save)
+                # 显示成功提示
+                if board_id:
+                    count = len([c for c in self.data_service.commands if c.board_id == board_id])
+                else:
+                    count = len(self.data_service.commands)
+                self._show_snack_bar(f"导出成功，共 {count} 条指令")
+            except Exception as ex:
+                self._show_snack_bar(f"导出失败：{str(ex)}")
+        self.page.update()
 
     def _show_snack_bar(self, message: str):
         """显示 SnackBar"""
