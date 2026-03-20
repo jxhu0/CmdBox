@@ -541,8 +541,7 @@ class CmdBoxApp:
     def _on_export_confirmed(self, scope: str, fmt: str, filename: str):
         """确认导出"""
         # 确定板块 ID 和计数方式
-        board_id = None
-        is_favorites = self.show_favorites_only and self.selected_board_id == self.FAVORITES_BOARD_ID
+        is_favorites = (self.selected_board_id == self.FAVORITES_BOARD_ID)
 
         if scope == "current":
             if is_favorites:
@@ -590,12 +589,6 @@ class CmdBoxApp:
             try:
                 with open(path, "w", encoding="utf-8") as f:
                     f.write(data)
-
-                # 显示成功提示
-                if board_id:
-                    count = len([c for c in self.data_service.commands if c.board_id == board_id])
-                else:
-                    count = len(self.data_service.commands)
                 self._show_snack_bar(f"导出成功，共 {count} 条指令")
             except Exception as ex:
                 self._show_snack_bar(f"导出失败：{str(ex)}")
