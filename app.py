@@ -113,16 +113,16 @@ class CmdBoxApp:
         # Logo 区域：深蓝背景 + CmdBox 文字（d和B连在一起）
         self.logo = ft.Container(
             content=ft.Row([
-                ft.Text("Cmd", size=18, weight=ft.FontWeight.W_800, color=ft.Colors.WHITE),
-                ft.Text("Box", size=18, weight=ft.FontWeight.W_800, color=ft.Colors.BLUE_200),
+                ft.Text("Cmd", size=20, weight=ft.FontWeight.W_800, color=ft.Colors.WHITE),
+                ft.Text("Box", size=20, weight=ft.FontWeight.W_800, color=ft.Colors.CYAN_200),
             ], spacing=-3, tight=True),
-            bgcolor=ft.Colors.BLUE_600,
-            padding=ft.padding.symmetric(horizontal=14, vertical=8),
-            border_radius=8,
+            bgcolor=ft.Colors.BLUE_GREY_800,
+            padding=ft.padding.symmetric(horizontal=16, vertical=9),
+            border_radius=9,
             shadow=ft.BoxShadow(
                 spread_radius=0,
-                blur_radius=6,
-                color=ft.Colors.with_opacity(0.2, ft.Colors.BLUE_700),
+                blur_radius=7,
+                color=ft.Colors.with_opacity(0.25, ft.Colors.BLUE_GREY_900),
                 offset=(0, 2)
             )
         )
