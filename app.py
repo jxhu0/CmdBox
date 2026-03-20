@@ -580,10 +580,6 @@ class CmdBoxApp:
             self.page.update()
 
         self.page.run_task(do_save)
-        file_picker.save_file(
-            dialog_title="保存导出文件",
-            file_name=filename,
-        )
 
     def _show_snack_bar(self, message: str):
         """显示 SnackBar"""
