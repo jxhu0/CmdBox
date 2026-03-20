@@ -110,15 +110,15 @@ class CmdBoxApp:
         def check():
             has_update, latest_ver, notes = UpdateService.check_for_updates(__version__)
             if has_update:
-                # 在主线程中显示对话框
-                def show_dialog():
-                    dialog = UpdateDialog(latest_ver, notes or "")
-                    self.page.show_dialog(dialog)
-
-                self.page.run_task(lambda e: show_dialog())
+                self.page.run_task(self._show_update_dialog, latest_ver, notes or "")
 
         thread = threading.Thread(target=check)
         thread.start()
+
+    async def _show_update_dialog(self, version, notes):
+        """显示更新对话框"""
+        dialog = UpdateDialog(version, notes)
+        self.page.show_dialog(dialog)
 
     def _build_ui(self):
         """构建界面"""
