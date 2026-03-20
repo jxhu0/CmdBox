@@ -556,8 +556,7 @@ class CmdBoxApp:
         # 使用 async 方式调用 FilePicker
         async def do_save():
             file_picker = ft.FilePicker()
-            self.page.overlay.append(file_picker)
-            self.page.update()
+            self.page.add(file_picker)
 
             path = await file_picker.save_file(
                 dialog_title="保存导出文件",
