@@ -14,6 +14,7 @@ from views.search_bar import SearchBar
 from views.command_list import CommandList
 from views.board_desc_card import BoardDescCard
 from views.dialogs import BoardDialog, CommandDialog, ConfirmDialog, EditAndCopyDialog, SettingsDialog
+from views.export_dialog import ExportDialog
 from views.setup_wizard import create_setup_wizard
 
 
@@ -109,6 +110,9 @@ class CmdBoxApp:
             on_search=self._on_search
         )
 
+        # 导出对话框
+        self.export_dialog = ExportDialog(on_export=self._on_export_confirmed)
+
         # 顶部栏（简洁现代风格）
         # Logo 区域：深蓝背景 + CmdBox 文字（d和B连在一起）
         self.logo = ft.Container(
@@ -130,8 +134,14 @@ class CmdBoxApp:
         self.header = ft.Container(
             content=ft.Row([
                 self.logo,
-                ft.Container(content=self.search_bar, expand=True, padding=ft.padding.symmetric(horizontal=20)),
+                ft.Container(content=self.search_bar, expand=True, padding=ft.padding.symmetric(horizontal=30)),
                 ft.Row([
+                    ft.IconButton(
+                        icon=ft.Icons.DOWNLOAD,
+                        icon_size=20,
+                        tooltip="导出指令",
+                        on_click=self._on_export_click
+                    ),
                     ft.IconButton(
                         icon=ft.Icons.SYNC,
                         icon_size=20,
@@ -520,6 +530,52 @@ class CmdBoxApp:
             self._show_snack_bar(msg)
         except Exception as ex:
             self._show_snack_bar(f"同步失败: {str(ex)}")
+
+    def _on_export_click(self, e):
+        """点击导出按钮"""
+        self.page.dialog = self.export_dialog
+        self.export_dialog.open = True
+        self.export_dialog.update()
+
+    def _on_export_confirmed(self, scope: str, fmt: str, filename: str):
+        """确认导出"""
+        # 确定板块 ID
+        board_id = None
+        if scope == "current":
+            board_id = self.selected_board_id
+
+        # 获取导出数据
+        data = self.data_service.export_commands(board_id=board_id, format=fmt)
+
+        # 添加文件扩展名
+        ext = ".json" if fmt == "json" else ".csv"
+        if not filename.endswith(ext):
+            filename += ext
+
+        def on_file_selected(e: ft.FilePickerResultEvent):
+            if e.path:
+                try:
+                    # 如果文件存在则直接覆盖
+                    with open(e.path, "w", encoding="utf-8") as f:
+                        f.write(data)
+
+                    # 显示成功提示
+                    if board_id:
+                        count = len([c for c in self.data_service.commands if c.board_id == board_id])
+                    else:
+                        count = len(self.data_service.commands)
+                    self._show_snack_bar(f"导出成功，共 {count} 条指令")
+                except Exception as ex:
+                    self._show_snack_bar(f"导出失败：{str(ex)}")
+            self.page.update()
+
+        file_picker = ft.FilePicker(on_result=on_file_selected)
+        self.page.overlay.append(file_picker)
+        self.page.update()
+        file_picker.save_file(
+            dialog_title="保存导出文件",
+            file_name=filename,
+        )
 
     def _show_snack_bar(self, message: str):
         """显示 SnackBar"""
