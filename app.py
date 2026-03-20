@@ -553,11 +553,18 @@ class CmdBoxApp:
         if not filename.endswith(ext):
             filename += ext
 
-        def on_file_selected(e: ft.FilePickerResultEvent):
-            if e.path:
+        def on_file_selected(e):
+            # 获取选择的文件路径
+            path = None
+            if hasattr(e, 'path') and e.path:
+                path = e.path
+            elif hasattr(e, 'files') and e.files:
+                path = e.files[0].path
+
+            if path:
                 try:
                     # 如果文件存在则直接覆盖
-                    with open(e.path, "w", encoding="utf-8") as f:
+                    with open(path, "w", encoding="utf-8") as f:
                         f.write(data)
 
                     # 显示成功提示
