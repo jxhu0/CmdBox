@@ -533,9 +533,10 @@ class CmdBoxApp:
 
     def _on_export_click(self, e):
         """点击导出按钮"""
-        self.page.dialog = self.export_dialog
+        if self.export_dialog not in self.page.overlay:
+            self.page.overlay.append(self.export_dialog)
         self.export_dialog.open = True
-        self.export_dialog.update()
+        self.page.update()
 
     def _on_export_confirmed(self, scope: str, fmt: str, filename: str):
         """确认导出"""
