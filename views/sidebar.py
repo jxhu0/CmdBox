@@ -32,7 +32,7 @@ class Sidebar(ft.Container):
         self.content = self._build_content()
 
     def _build_content(self) -> ft.Column:
-        items = []
+        board_items = []
 
         # 收藏板块（固定在最上方）
         if self.favorites_board_id:
@@ -53,7 +53,7 @@ class Sidebar(ft.Container):
                 border=ft.border.only(left=ft.border.BorderSide(3, ft.Colors.AMBER_500)) if is_selected else None,
                 on_click=lambda e: self.on_board_select(self.favorites_board_id)
             )
-            items.append(fav_item)
+            board_items.append(fav_item)
 
         # 普通板块列表
         for board in self.boards:
@@ -84,9 +84,9 @@ class Sidebar(ft.Container):
                 border=ft.border.only(left=ft.border.BorderSide(3, ft.Colors.BLUE_500)) if is_selected else None,
                 on_click=lambda e, bid=board.id: self.on_board_select(bid)
             )
-            items.append(item)
+            board_items.append(item)
 
-        # 添加新建按钮
+        # 新建按钮（固定在底部）
         add_btn = ft.Container(
             content=ft.TextButton(
                 content=ft.Row([
@@ -100,13 +100,16 @@ class Sidebar(ft.Container):
             padding=8
         )
 
+        # 使用 Column 布局：标题 + 可滚动列表 + 固定底部按钮
         return ft.Column([
             ft.Text("板块", size=10, color=ft.Colors.GREY_500, weight=ft.FontWeight.BOLD),
-            ft.Divider(height=3, color="transparent"),
-            *items,
-            ft.Divider(height=8, color="transparent"),
+            ft.Container(
+                content=ft.ListView(controls=board_items, expand=True),
+                expand=True,
+                padding=0
+            ),
             add_btn
-        ])
+        ], tight=False, expand=True)
 
     def update_boards(self, boards: List[Board], selected_id: Optional[str] = None, favorites_id: Optional[str] = None):
         self.boards = boards
