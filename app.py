@@ -377,12 +377,41 @@ class CmdBoxApp:
 
     def _on_copy_command(self, command: Command):
         """复制指令"""
-        if self.clipboard_service.copy(command.content):
-            self.page.snack_bar = ft.SnackBar(ft.Text("已复制到剪贴板"))
-        else:
-            self.page.snack_bar = ft.SnackBar(ft.Text("复制失败"))
-        self.page.snack_bar.open = True
+        success = self.clipboard_service.copy(command.content)
+
+        # 创建悬浮提示
+        toast = ft.Container(
+            content=ft.Row([
+                ft.Icon(ft.Icons.CHECK_CIRCLE if success else ft.Icons.ERROR,
+                        color=ft.Colors.GREEN_600 if success else ft.Colors.RED_600, size=18),
+                ft.Text("已复制到剪贴板" if success else "复制失败",
+                        size=13, color=ft.Colors.GREY_800),
+            ], tight=True, spacing=6),
+            bgcolor=ft.Colors.WHITE,
+            padding=ft.padding.symmetric(horizontal=14, vertical=10),
+            border_radius=8,
+            shadow=ft.BoxShadow(
+                spread_radius=1,
+                blur_radius=6,
+                color=ft.Colors.with_opacity(0.15, ft.Colors.GREY_500),
+                offset=(0, 2)
+            )
+        )
+
+        # 添加到overlay
+        self.page.overlay.append(toast)
         self.page.update()
+
+        # 2秒后移除
+        def remove_toast():
+            import time
+            time.sleep(2)
+            if toast in self.page.overlay:
+                self.page.overlay.remove(toast)
+                self.page.update()
+
+        import threading
+        threading.Thread(target=remove_toast, daemon=True).start()
 
     def _on_edit_command(self, command: Command):
         """编辑指令"""
