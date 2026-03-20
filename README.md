@@ -31,3 +31,23 @@ python3 main.py
 - Flet 0.82.2 (UI 框架)
 - GitPython (Git 操作)
 - pyperclip (剪贴板)
+- requests (自动更新)
+
+## 打包
+
+使用 Flet 官方工具打包：
+
+```bash
+pip install -r requirements.txt
+pip install flet
+
+# macOS
+flet pack --python-script main.py --platform macos
+
+# Windows
+flet pack --python-script main.py --platform windows
+```
+
+## 自动更新
+
+程序启动时会自动检测新版本，发现新版本时会提示用户前往 GitHub 下载。
