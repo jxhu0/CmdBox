@@ -110,26 +110,19 @@ class CmdBoxApp:
         )
 
         # 顶部栏（简洁现代风格）
-        # Logo 区域：浅蓝渐变背景 + CmdBox 文字 + 光标
+        # Logo 区域：深蓝背景 + CmdBox 文字（d和B连在一起）
         self.logo = ft.Container(
             content=ft.Row([
-                ft.Text("Cmd", size=16, weight=ft.FontWeight.W_800, color=ft.Colors.WHITE, font_family="monospace"),
-                ft.Text("Box", size=16, weight=ft.FontWeight.W_800, color=ft.Colors.WHITE, font_family="monospace"),
-                ft.Container(
-                    width=2,
-                    height=16,
-                    bgcolor=ft.Colors.WHITE,
-                    border_radius=1,
-                    margin=ft.margin.only(left=2)
-                )
-            ], spacing=0, tight=True),
-            bgcolor=ft.Colors.BLUE_400,
-            padding=ft.padding.symmetric(horizontal=12, vertical=6),
+                ft.Text("Cmd", size=18, weight=ft.FontWeight.W_800, color=ft.Colors.WHITE),
+                ft.Text("Box", size=18, weight=ft.FontWeight.W_800, color=ft.Colors.BLUE_200),
+            ], spacing=-3, tight=True),
+            bgcolor=ft.Colors.BLUE_600,
+            padding=ft.padding.symmetric(horizontal=14, vertical=8),
             border_radius=8,
             shadow=ft.BoxShadow(
                 spread_radius=0,
-                blur_radius=8,
-                color=ft.Colors.with_opacity(0.15, ft.Colors.BLUE_400),
+                blur_radius=6,
+                color=ft.Colors.with_opacity(0.2, ft.Colors.BLUE_700),
                 offset=(0, 2)
             )
         )
