@@ -29,8 +29,8 @@ class SearchBar(ft.Container):
             on_change=self._on_search_change,
             expand=True,
             text_size=13,
-            bgcolor=ft.Colors.GREY_50,
-            border_color=ft.Colors.GREY_300,
+            bgcolor=ft.Colors.WHITE,
+            border_color=ft.Colors.GREY_200,
             focused_border_color=ft.Colors.BLUE_500,
             border_radius=8,
             content_padding=ft.padding.symmetric(horizontal=12, vertical=8)

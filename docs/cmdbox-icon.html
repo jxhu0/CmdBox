@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CmdBox Icon</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700;800&family=Inter:wght@600;800&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #f5f5f5;
+            font-family: 'Inter', sans-serif;
+            gap: 40px;
+            padding: 40px;
+        }
+
+        .icon-container {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            border-radius: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow:
+                0 25px 50px -12px rgba(0, 0, 0, 0.4),
+                0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+            overflow: hidden;
+        }
+
+        .icon-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 50%;
+            background: linear-gradient(180deg, rgba(255,255,255,0.08) 0%, transparent 100%);
+            border-radius: 44px 44px 0 0;
+        }
+
+        .icon-container::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.1) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .text-group {
+            position: relative;
+            z-index: 1;
+        }
+
+        .cmd {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 52px;
+            font-weight: 800;
+            color: #fff;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            letter-spacing: -2px;
+            line-height: 1;
+        }
+
+        .cmd-accent {
+            color: #60a5fa;
+            text-shadow: 0 0 20px rgba(96, 165, 250, 0.5);
+        }
+
+        .box {
+            font-family: 'Inter', sans-serif;
+            font-size: 52px;
+            font-weight: 800;
+            color: #60a5fa;
+            letter-spacing: -1px;
+            margin-left: -4px;
+            text-shadow: 0 0 30px rgba(96, 165, 250, 0.4);
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 4px;
+            height: 48px;
+            background: linear-gradient(180deg, #60a5fa, #3b82f6);
+            margin-left: 6px;
+            border-radius: 2px;
+            animation: blink 1s ease-in-out infinite;
+            box-shadow: 0 0 10px rgba(96, 165, 250, 0.6);
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        /* Icon variant 2 - Smaller icon format */
+        .icon-small {
+            width: 64px;
+            height: 64px;
+            border-radius: 16px;
+        }
+
+        .icon-small .cmd {
+            font-size: 20px;
+        }
+
+        .icon-small .box {
+            font-size: 20px;
+        }
+
+        .icon-small .cursor {
+            width: 2px;
+            height: 18px;
+            margin-left: 2px;
+        }
+
+        /* Icon variant 3 - Square app icon style */
+        .icon-square {
+            width: 180px;
+            height: 180px;
+            border-radius: 0;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        }
+
+        .icon-square::before {
+            border-radius: 0;
+        }
+
+        .label {
+            font-size: 14px;
+            color: #666;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 60px;">
+        <!-- Main Icon -->
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 16px;">
+            <div class="icon-container">
+                <div class="text-group">
+                    <span class="cmd">Cmd</span><span class="box">Box</span><span class="cursor"></span>
+                </div>
+            </div>
+            <p class="label">200 × 200 (App Icon)</p>
+        </div>
+
+        <!-- Small Icon -->
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 16px;">
+            <div class="icon-container icon-small">
+                <div class="text-group">
+                    <span class="cmd">Cmd</span><span class="box">Box</span><span class="cursor"></span>
+                </div>
+            </div>
+            <p class="label">64 × 64 (Taskbar / Dock)</p>
+        </div>
+
+        <!-- Square Icon -->
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 16px;">
+            <div class="icon-container icon-square">
+                <div class="text-group">
+                    <span class="cmd">Cmd</span><span class="box">Box</span><span class="cursor"></span>
+                </div>
+            </div>
+            <p class="label">180 × 180 (Square Style)</p>
+        </div>
+    </div>
+</body>
+</html>
