@@ -18,8 +18,9 @@ class UpdateService:
 
         Returns:
             Tuple[有新版本, 最新版本号, 更新说明]
-            - (False, None, None) 表示无新版本或检查失败
+            - (False, "v1.1.0", "") 表示无新版本（但会返回最新版本号）
             - (True, "v1.1.0", "更新内容...") 表示有新版本
+            - (False, None, None) 表示检查失败
         """
         try:
             response = requests.get(API_URL, timeout=5)
@@ -32,9 +33,10 @@ class UpdateService:
 
             # 去除 tag_name 的 'v' 前缀进行比较
             latest_ver = latest_version.lstrip("v")
+            current_ver = current_version.lstrip("v")
 
-            if latest_ver != current_version:
+            if latest_ver != current_ver:
                 return True, latest_version, release_notes
-            return False, None, None
+            return False, latest_version, release_notes
         except Exception:
             return False, None, None
