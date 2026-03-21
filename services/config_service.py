@@ -84,3 +84,8 @@ class ConfigService:
     def get_latest_version(self) -> Optional[str]:
         """获取最新版本号"""
         return self.config.get("latest_version")
+
+    def clear_latest_version_cache(self):
+        """清除最新版本号缓存"""
+        self.config["latest_version"] = ""
+        self.save()

@@ -1,5 +1,5 @@
 # app.py
-__version__ = "1.0.14"
+__version__ = "1.0.15"
 
 import flet as ft
 from pathlib import Path
@@ -122,6 +122,15 @@ class CmdBoxApp:
         import threading
 
         def check():
+            # 如果当前版本高于缓存的最新版本，清除缓存以强制刷新
+            cached = self.config_service.get_latest_version()
+            if cached:
+                # 去掉 v 前缀比较
+                cached_ver = cached.lstrip("v")
+                current_ver = __version__.lstrip("v")
+                if current_ver > cached_ver:
+                    self.config_service.clear_latest_version_cache()
+
             # 总是检测最新版本并保存到配置
             has_update, latest_ver, notes = UpdateService.check_for_updates(__version__)
             if latest_ver:
