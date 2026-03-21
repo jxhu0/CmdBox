@@ -1,5 +1,5 @@
 # app.py
-__version__ = "1.0.9"
+__version__ = "1.0.10"
 
 import flet as ft
 from pathlib import Path
@@ -63,6 +63,20 @@ class CmdBoxApp:
         self.page.window.width = 900
         self.page.window.height = 600
         self.page.theme_mode = ft.ThemeMode.LIGHT
+
+        # 根据操作系统设置字体
+        import platform
+        system = platform.system()
+        if system == "Darwin":
+            # macOS 使用苹方字体
+            font_family = "PingFang SC"
+        elif system == "Windows":
+            # Windows 使用微软雅黑
+            font_family = "Microsoft YaHei"
+        else:
+            # Linux 等其他系统
+            font_family = "Source Han Sans SC"
+        self.page.theme = ft.Theme(font_family=font_family)
 
     def _show_setup_wizard(self):
         """显示设置向导"""
