@@ -351,9 +351,10 @@ class SettingsDialog(ft.AlertDialog):
         self.path_data = {"path": repo_path}
 
         self.modal = True
+        self.title_padding = 0
         self.title = ft.Container(
             content=ft.Row([
-                ft.Text("设置", weight=ft.FontWeight.BOLD),
+                ft.Text("设置", weight=ft.FontWeight.BOLD, size=18),
                 ft.Container(expand=True),
                 ft.IconButton(
                     icon=ft.Icons.CLOSE,
@@ -363,14 +364,15 @@ class SettingsDialog(ft.AlertDialog):
                     style=ft.ButtonStyle(color=ft.Colors.GREY_500)
                 )
             ], alignment=ft.MainAxisAlignment.START),
-            padding=ft.padding.only(right=5)
+            padding=ft.padding.only(left=24, right=5, top=16, bottom=8)
         )
 
         # 数据路径（可编辑）
         self.path_field = ft.TextField(
             label="数据存储路径",
             value=repo_path,
-            on_change=self._on_path_change
+            on_change=self._on_path_change,
+            dense=True
         )
 
         # 浏览按钮
@@ -401,9 +403,14 @@ class SettingsDialog(ft.AlertDialog):
             ft.Text("3. 点击保存后，使用同步功能推送数据", size=11, color=ft.Colors.GREY_600),
         ], spacing=2)
 
+        self.content_padding = 24
         self.content = ft.Column([
-            ft.Row([self.path_field, self.browse_btn], alignment=ft.MainAxisAlignment.START),
-            ft.Divider(height=10, color="transparent"),
+            ft.Container(
+                content=ft.Row([
+                    self.path_field, self.browse_btn
+                ], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                padding=ft.padding.only(top=10, bottom=10)
+            ),
             self.remote_field,
             ft.Divider(height=10, color="transparent"),
             self.help_text,
@@ -411,7 +418,7 @@ class SettingsDialog(ft.AlertDialog):
             ft.Text("数据备份", size=12, weight=ft.FontWeight.BOLD),
             ft.Text("同步前会自动创建备份，最多保留10个", size=10, color=ft.Colors.GREY_600),
             self.backup_list,
-        ], tight=True, scroll=ft.ScrollMode.AUTO)
+        ], scroll=ft.ScrollMode.AUTO)
 
         self.actions = [
             ft.TextButton("保存", on_click=self._on_save)
