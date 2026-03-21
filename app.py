@@ -1,5 +1,5 @@
 # app.py
-__version__ = "1.0.15"
+__version__ = "1.0.16"
 
 import flet as ft
 from pathlib import Path
@@ -142,6 +142,17 @@ class CmdBoxApp:
 
         thread = threading.Thread(target=check)
         thread.start()
+
+    def _get_latest_version_sync(self):
+        """同步获取最新版本（用于打开设置对话框时）"""
+        try:
+            has_update, latest_ver, notes = UpdateService.check_for_updates(__version__)
+            if latest_ver:
+                self.config_service.set_latest_version(latest_ver)
+                return latest_ver
+        except Exception:
+            pass
+        return self.config_service.get_latest_version()
 
     async def _show_update_dialog(self, version, notes):
         """显示更新对话框"""
@@ -714,7 +725,8 @@ set thePath to POSIX path of (choose file name default name "{filename}" with pr
                 self.config_service.set("repo_path", new_path)
                 self._show_snack_bar("数据存储路径已更改，请重启应用生效")
 
-        latest_version = self.config_service.get_latest_version()
+        # 同步获取最新版本（直接请求不阻塞UI）
+        latest_version = self._get_latest_version_sync()
         if latest_version:
             latest_version = latest_version.lstrip("v")
 
