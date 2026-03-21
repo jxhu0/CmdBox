@@ -1,5 +1,5 @@
 # app.py
-__version__ = "1.0.4"
+__version__ = "1.0.5"
 
 import flet as ft
 from pathlib import Path
@@ -640,8 +640,11 @@ set thePath to POSIX path of (choose file name default name "{filename}" with pr
 
     def _show_snack_bar(self, message: str):
         """显示 SnackBar"""
-        snack_bar = ft.SnackBar(ft.Text(message))
-        self.page.show_dialog(snack_bar)
+        snack_bar = ft.SnackBar(content=ft.Text(message))
+        if snack_bar not in self.page.overlay:
+            self.page.overlay.append(snack_bar)
+        snack_bar.open = True
+        self.page.update()
 
     def _on_settings(self, e):
         """设置"""

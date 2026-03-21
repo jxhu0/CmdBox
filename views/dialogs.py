@@ -385,7 +385,8 @@ class SettingsDialog(ft.AlertDialog):
             label="Git 远程仓库地址",
             value=remote_url,
             hint_text="例如: https://github.com/username/cmdbox-data.git",
-            expand=True
+            expand=True,
+            on_change=self._on_remote_change
         )
 
         # 备份列表
@@ -427,6 +428,10 @@ class SettingsDialog(ft.AlertDialog):
     def _on_path_change(self, e):
         """路径文本变化"""
         self.path_data["path"] = e.control.value
+
+    def _on_remote_change(self, e):
+        """远程地址文本变化"""
+        pass  # TextField.value 已自动更新
 
     def _refresh_backups(self):
         """刷新备份列表"""
