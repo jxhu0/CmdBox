@@ -403,6 +403,12 @@ class SettingsDialog(ft.AlertDialog):
             ft.Text("3. 点击保存后，使用同步功能推送数据", size=11, color=ft.Colors.GREY_600),
         ], spacing=2)
 
+        self.tutorial_btn = ft.TextButton(
+            "使用已有远程仓库？查看教程",
+            icon=ft.Icons.MENU_BOOK,
+            on_click=self._on_show_tutorial
+        )
+
         self.content_padding = 24
         self.content = ft.Column([
             ft.Container(
@@ -414,6 +420,7 @@ class SettingsDialog(ft.AlertDialog):
             self.remote_field,
             ft.Divider(height=10, color="transparent"),
             self.help_text,
+            self.tutorial_btn,
             ft.Divider(height=10, color="transparent"),
             ft.Text("数据备份", size=12, weight=ft.FontWeight.BOLD),
             ft.Text("同步前会自动创建备份，最多保留10个", size=10, color=ft.Colors.GREY_600),
@@ -431,6 +438,50 @@ class SettingsDialog(ft.AlertDialog):
             self.path_field.value = folder
             self.path_field.update()
             self.path_data["path"] = folder
+
+    def _on_show_tutorial(self, e):
+        """显示教程对话框"""
+        page = self.page
+
+        tutorial_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Container(
+                content=ft.Row([
+                    ft.Icon(ft.Icons.MENU_BOOK, color=ft.Colors.BLUE_600),
+                    ft.Text("使用教程", weight=ft.FontWeight.BOLD)
+                ], spacing=10)
+            ),
+            content=ft.Column([
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("在新电脑使用已有数据初始化：", size=14, weight=ft.FontWeight.W_600, color=ft.Colors.BLUE_GREY_800),
+                        ft.Container(height=10),
+                        ft.Text("1. 在本地 clone 远程仓库到指定文件夹", size=13, color=ft.Colors.GREY_700),
+                        ft.Container(height=6),
+                        ft.Text("2. 打开 CmdBox，在向导中选择该文件夹路径", size=13, color=ft.Colors.GREY_700),
+                        ft.Container(height=6),
+                        ft.Text("3. 进入应用后，点击右上角设置", size=13, color=ft.Colors.GREY_700),
+                        ft.Container(height=6),
+                        ft.Text("4. 在「Git 远程仓库地址」中填写远程仓库地址", size=13, color=ft.Colors.GREY_700),
+                        ft.Container(height=6),
+                        ft.Text("5. 点击「保存」即可同步数据", size=13, color=ft.Colors.GREY_700),
+                    ], tight=True),
+                    padding=15,
+                    bgcolor=ft.Colors.BLUE_50,
+                    border_radius=12
+                )
+            ], tight=True),
+            actions=[
+                ft.TextButton("我知道了", on_click=lambda e: close_tutorial(tutorial_dialog))
+            ],
+            actions_alignment=ft.MainAxisAlignment.END
+        )
+
+        def close_tutorial(dialog):
+            dialog.open = False
+            page.update()
+
+        page.show_dialog(tutorial_dialog)
 
     def _on_path_change(self, e):
         """路径文本变化"""
