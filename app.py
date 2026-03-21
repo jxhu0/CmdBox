@@ -1,5 +1,5 @@
 # app.py
-__version__ = "1.0.13"
+__version__ = "1.0.14"
 
 import flet as ft
 from pathlib import Path
@@ -122,15 +122,13 @@ class CmdBoxApp:
         import threading
 
         def check():
-            # 检查是否在免提醒期内
-            if self.config_service.is_in_update_remind_period():
-                return
-
+            # 总是检测最新版本并保存到配置
             has_update, latest_ver, notes = UpdateService.check_for_updates(__version__)
-            # 保存最新版本号到配置
             if latest_ver:
                 self.config_service.set_latest_version(latest_ver)
-            if has_update:
+
+            # 只有在免提醒期内才跳过弹窗
+            if has_update and not self.config_service.is_in_update_remind_period():
                 self.page.run_task(self._show_update_dialog, latest_ver, notes or "")
 
         thread = threading.Thread(target=check)
