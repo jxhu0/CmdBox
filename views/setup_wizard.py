@@ -63,6 +63,48 @@ def create_setup_wizard(page: ft.Page, on_complete: Callable[[str], None]) -> ft
         if path:
             on_complete(path)
 
+    def on_show_tutorial(e):
+        """显示教程对话框"""
+        tutorial_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Container(
+                content=ft.Row([
+                    ft.Icon(ft.Icons.MENU_BOOK, color=ft.Colors.BLUE_600),
+                    ft.Text("使用教程", weight=ft.FontWeight.BOLD)
+                ], spacing=10)
+            ),
+            content=ft.Column([
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("在新电脑使用已有数据初始化：", size=14, weight=ft.FontWeight.W_600, color=ft.Colors.BLUE_GREY_800),
+                        ft.Container(height=10),
+                        ft.Text("1. 在本地 clone 远程仓库到指定文件夹", size=13, color=ft.Colors.GREY_700),
+                        ft.Container(height=6),
+                        ft.Text("2. 打开 CmdBox，在向导中选择该文件夹路径", size=13, color=ft.Colors.GREY_700),
+                        ft.Container(height=6),
+                        ft.Text("3. 进入应用后，点击右上角设置", size=13, color=ft.Colors.GREY_700),
+                        ft.Container(height=6),
+                        ft.Text("4. 在「Git 远程仓库地址」中填写远程仓库地址", size=13, color=ft.Colors.GREY_700),
+                        ft.Container(height=6),
+                        ft.Text("5. 点击「保存」即可同步数据", size=13, color=ft.Colors.GREY_700),
+                    ], tight=True),
+                    padding=15,
+                    bgcolor=ft.Colors.BLUE_50,
+                    border_radius=12
+                )
+            ], tight=True),
+            actions=[
+                ft.TextButton("我知道了", on_click=lambda e: close_tutorial(tutorial_dialog))
+            ],
+            actions_alignment=ft.MainAxisAlignment.END
+        )
+
+        def close_tutorial(dialog):
+            dialog.open = False
+            page.update()
+
+        page.show_dialog(tutorial_dialog)
+
     path_input = ft.TextField(
         hint_text="选择或输入目录路径",
         width=400,
@@ -91,6 +133,12 @@ def create_setup_wizard(page: ft.Page, on_complete: Callable[[str], None]) -> ft
             on_click=on_start,
             width=200,
             height=45
+        ),
+        ft.Container(height=20),
+        ft.TextButton(
+            "使用已有远程仓库？查看教程",
+            icon=ft.Icons.MENU_BOOK,
+            on_click=on_show_tutorial
         )
     ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.CENTER, expand=True)
 
