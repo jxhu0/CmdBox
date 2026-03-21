@@ -1,5 +1,5 @@
 # app.py
-__version__ = "1.0.11"
+__version__ = "1.0.12"
 
 import flet as ft
 from pathlib import Path
@@ -127,6 +127,9 @@ class CmdBoxApp:
                 return
 
             has_update, latest_ver, notes = UpdateService.check_for_updates(__version__)
+            # 保存最新版本号到配置
+            if latest_ver:
+                self.config_service.set_latest_version(latest_ver)
             if has_update:
                 self.page.run_task(self._show_update_dialog, latest_ver, notes or "")
 
@@ -704,13 +707,18 @@ set thePath to POSIX path of (choose file name default name "{filename}" with pr
                 self.config_service.set("repo_path", new_path)
                 self._show_snack_bar("数据存储路径已更改，请重启应用生效")
 
+        latest_version = self.config_service.get_latest_version()
+        if latest_version:
+            latest_version = latest_version.lstrip("v")
+
         dialog = SettingsDialog(
             repo_path=self.config_service.get("repo_path"),
             remote_url=current_remote_url,
             data_service=self.data_service,
             on_save=on_save,
             on_restore=on_restore,
-            on_path_save=on_path_save
+            on_path_save=on_path_save,
+            latest_version=latest_version
         )
         self.page.show_dialog(dialog)
         self.page.update()

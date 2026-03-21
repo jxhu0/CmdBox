@@ -341,12 +341,14 @@ class SettingsDialog(ft.AlertDialog):
         data_service=None,
         on_save: Callable[[str], None] = None,
         on_restore: Callable[[str], None] = None,
-        on_path_save: Callable[[str], None] = None
+        on_path_save: Callable[[str], None] = None,
+        latest_version: str = None
     ):
         import app as app_module
         super().__init__()
         self.on_save_callback = on_save
         self._version = app_module.__version__
+        self._latest_version = latest_version
         self.on_restore_callback = on_restore
         self.on_path_save_callback = on_path_save
         self.data_service = data_service
@@ -428,7 +430,7 @@ class SettingsDialog(ft.AlertDialog):
             ft.Text("同步前会自动创建备份，最多保留10个", size=10, color=ft.Colors.GREY_600),
             self.backup_list,
             ft.Container(height=10),
-            ft.Text(f"当前版本 v{self._version}", size=13, color=ft.Colors.BLUE_600),
+            ft.Text(f"当前版本 v{self._version}" + (f"（最新版本 v{self._latest_version}）" if self._latest_version else ""), size=13, color=ft.Colors.BLUE_600),
         ], scroll=ft.ScrollMode.AUTO)
 
         self.actions = [

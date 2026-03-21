@@ -75,3 +75,12 @@ class ConfigService:
         remind_date = datetime.now() + timedelta(days=7)
         self.config["update_remind_until"] = remind_date.isoformat()
         self.save()
+
+    def set_latest_version(self, version: str):
+        """保存最新版本号"""
+        self.config["latest_version"] = version
+        self.save()
+
+    def get_latest_version(self) -> Optional[str]:
+        """获取最新版本号"""
+        return self.config.get("latest_version")
