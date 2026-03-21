@@ -1,5 +1,5 @@
 # app.py
-__version__ = "1.0.17"
+__version__ = "1.0.18"
 
 import flet as ft
 from pathlib import Path
@@ -744,7 +744,14 @@ set thePath to POSIX path of (choose file name default name "{filename}" with pr
 
 
 def main(page: ft.Page):
-    CmdBoxApp(page)
+    app = CmdBoxApp(page)
+
+    # 处理窗口关闭事件，确保程序正确退出
+    def on_window_event(e):
+        if e.data == "close":
+            page.window_destroy()
+
+    page.on_window_event = on_window_event
 
 
 if __name__ == "__main__":
