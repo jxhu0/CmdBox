@@ -28,7 +28,7 @@ class GitService:
         """初始化 Git 仓库"""
         try:
             self.repo_path.mkdir(parents=True, exist_ok=True)
-            self.git.Repo.init(self.repo_path)
+            self.git.Repo.init(self.repo_path, initial_branch="main")
             return True
         except Exception as e:
             print(f"Init repo error: {e}")
@@ -74,7 +74,7 @@ class GitService:
                 return True, "没有配置远程仓库"
 
             origin = repo.remotes.origin
-            current_branch = repo.active_branch.name
+            target_branch = "main"
 
             # 尝试获取远程分支信息
             try:
@@ -82,14 +82,14 @@ class GitService:
             except Exception:
                 return True, "无法获取远程信息，跳过拉取"
 
-            # 检查远程是否有对应分支
-            remote_branch = f"origin/{current_branch}"
+            # 检查远程是否有 main 分支
+            remote_branch = f"origin/{target_branch}"
             if remote_branch not in [ref.name for ref in origin.refs]:
                 return True, "远程没有对应分支，跳过拉取"
 
             # 尝试拉取，使用 --allow-unrelated-histories 允许合并不相关的历史
             try:
-                repo.git.pull("origin", current_branch, "--allow-unrelated-histories")
+                repo.git.pull("origin", target_branch, "--allow-unrelated-histories")
             except Exception as e:
                 error_msg = str(e)
                 # 如果是合并冲突，需要特殊处理
@@ -115,16 +115,27 @@ class GitService:
                 return True, "没有配置远程仓库"
 
             origin = repo.remotes.origin
+            target_branch = "main"
 
-            # 检查当前分支
+            # 如果本地是 master 分支，创建一个新的 main 分支并切换
             current_branch = repo.active_branch.name
+            if current_branch != target_branch:
+                try:
+                    # 检查本地是否已有 main 分支
+                    if target_branch not in [b.name for b in repo.branches]:
+                        # 创建 main 分支
+                        repo.create_head(target_branch)
+                    # 切换到 main 分支
+                    repo.git.checkout(target_branch)
+                except Exception as e:
+                    return False, f"切换分支失败: {e}"
 
             # 尝试推送，设置上游分支
             try:
-                origin.push(current_branch)
+                origin.push(target_branch)
             except Exception:
                 # 可能是首次推送，需要设置上游分支
-                repo.git.push("--set-upstream", "origin", current_branch)
+                repo.git.push("--set-upstream", "origin", target_branch)
 
             return True, "推送成功"
         except Exception as e:
