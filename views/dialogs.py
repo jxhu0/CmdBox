@@ -428,7 +428,7 @@ class SettingsDialog(ft.AlertDialog):
             ft.Text("同步前会自动创建备份，最多保留10个", size=10, color=ft.Colors.GREY_600),
             self.backup_list,
             ft.Container(height=10),
-            ft.Text(f"当前版本 v{self._version}", size=11, color=ft.Colors.GREY_500),
+            ft.Text(f"当前版本 v{self._version}", size=12, color=ft.Colors.GREY_600),
         ], scroll=ft.ScrollMode.AUTO)
 
         self.actions = [
