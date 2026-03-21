@@ -6,10 +6,11 @@ import webbrowser
 class UpdateDialog(ft.AlertDialog):
     """更新提示对话框"""
 
-    def __init__(self, latest_version: str, release_notes: str):
+    def __init__(self, latest_version: str, release_notes: str, on_remind_later: callable = None):
         super().__init__()
         self.modal = True
         self.dismiss = False
+        self.on_remind_later = on_remind_later
 
         # 格式化更新说明
         notes_text = release_notes.strip() if release_notes else ""
@@ -45,9 +46,15 @@ class UpdateDialog(ft.AlertDialog):
 
         self.actions = [
             ft.TextButton(
+                "暂不提醒",
+                on_click=self._on_remind_later,
+                style=ft.ButtonStyle(color=ft.Colors.GREY_600)
+            ),
+            ft.Container(width=10),
+            ft.TextButton(
                 "暂不更新",
                 on_click=self._on_cancel,
-                style=ft.ButtonStyle(color=ft.Colors.GREY_600)
+                style=ft.ButtonStyle(color=ft.Colors.GREY_500)
             ),
             ft.Container(width=10),
             ft.ElevatedButton(
@@ -63,6 +70,12 @@ class UpdateDialog(ft.AlertDialog):
         self.actions_alignment = ft.MainAxisAlignment.END
 
     def _on_cancel(self, e):
+        self.open = False
+        self.update()
+
+    def _on_remind_later(self, e):
+        if self.on_remind_later:
+            self.on_remind_later()
         self.open = False
         self.update()
 

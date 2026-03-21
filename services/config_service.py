@@ -11,7 +11,8 @@ class ConfigService:
     DEFAULT_CONFIG = {
         "repo_path": "",
         "theme": "light",
-        "last_sync": ""
+        "last_sync": "",
+        "update_remind_until": ""
     }
 
     def __init__(self, config_path: str):
@@ -38,7 +39,8 @@ class ConfigService:
         self.config = {
             "repo_path": repo_path,
             "theme": "light",
-            "last_sync": ""
+            "last_sync": "",
+            "update_remind_until": ""
         }
         self.save()
 
@@ -55,3 +57,21 @@ class ConfigService:
 
     def is_initialized(self) -> bool:
         return bool(self.config.get("repo_path"))
+
+    def is_in_update_remind_period(self) -> bool:
+        """检查是否在更新提醒期内"""
+        remind_until = self.config.get("update_remind_until", "")
+        if not remind_until:
+            return False
+        try:
+            remind_date = datetime.fromisoformat(remind_until)
+            return datetime.now() < remind_date
+        except (ValueError, TypeError):
+            return False
+
+    def set_update_remind_until(self):
+        """设置暂不提醒，截止时间为7天后"""
+        from datetime import timedelta
+        remind_date = datetime.now() + timedelta(days=7)
+        self.config["update_remind_until"] = remind_date.isoformat()
+        self.save()

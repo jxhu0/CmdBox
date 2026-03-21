@@ -1,5 +1,5 @@
 # app.py
-__version__ = "1.0.8"
+__version__ = "1.0.9"
 
 import flet as ft
 from pathlib import Path
@@ -108,6 +108,10 @@ class CmdBoxApp:
         import threading
 
         def check():
+            # 检查是否在免提醒期内
+            if self.config_service.is_in_update_remind_period():
+                return
+
             has_update, latest_ver, notes = UpdateService.check_for_updates(__version__)
             if has_update:
                 self.page.run_task(self._show_update_dialog, latest_ver, notes or "")
@@ -117,7 +121,10 @@ class CmdBoxApp:
 
     async def _show_update_dialog(self, version, notes):
         """显示更新对话框"""
-        dialog = UpdateDialog(version, notes)
+        def on_remind_later():
+            self.config_service.set_update_remind_until()
+
+        dialog = UpdateDialog(version, notes, on_remind_later=on_remind_later)
         self.page.show_dialog(dialog)
 
     def _build_ui(self):
