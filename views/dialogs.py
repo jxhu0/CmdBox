@@ -413,7 +413,6 @@ class SettingsDialog(ft.AlertDialog):
         ], tight=True, scroll=ft.ScrollMode.AUTO)
 
         self.actions = [
-            ft.TextButton("取消", on_click=self._on_cancel),
             ft.TextButton("保存", on_click=self._on_save)
         ]
 
