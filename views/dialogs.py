@@ -430,12 +430,25 @@ class SettingsDialog(ft.AlertDialog):
             ft.Text("同步前会自动创建备份，最多保留10个", size=10, color=ft.Colors.GREY_600),
             self.backup_list,
             ft.Container(height=10),
-            ft.Text(f"当前版本 v{self._version}" + (f"（最新版本 v{self._latest_version}）" if self._latest_version else ""), size=13, color=ft.Colors.BLUE_600),
+            ft.Row([
+                ft.Text(f"当前版本 v{self._version}" + (f"（最新版本 v{self._latest_version}）" if self._latest_version else ""), size=13, color=ft.Colors.BLUE_600),
+                ft.TextButton(
+                    "前往下载",
+                    icon=ft.Icons.DOWNLOAD,
+                    on_click=self._on_download,
+                    style=ft.ButtonStyle(color=ft.Colors.BLUE_600)
+                ),
+            ], alignment=ft.MainAxisAlignment.START),
         ], scroll=ft.ScrollMode.AUTO)
 
         self.actions = [
             ft.TextButton("保存", on_click=self._on_save)
         ]
+
+    def _on_download(self, e):
+        """打开 GitHub releases 下载页面"""
+        import webbrowser
+        webbrowser.open("https://github.com/jxhu0/CmdBox/releases")
 
     def _on_browse(self, e):
         """浏览选择新路径"""
