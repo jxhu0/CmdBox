@@ -1,0 +1,35 @@
+<svg viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6"/>
+      <stop offset="100%" style="stop-color:#6366f1"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 背景圆角矩形 -->
+  <rect width="1024" height="1024" rx="220" fill="url(#bgGradient)"/>
+
+  <!-- 柜体 -->
+  <path d="M204 153 L204 920 L820 920 L820 153 L204 153" fill="white"/>
+
+  <!-- 左侧面阴影 -->
+  <path d="M204 153 L204 920 L285 870 L285 102 Z" fill="white" fill-opacity="0.7"/>
+
+  <!-- 右侧面阴影 -->
+  <path d="M820 153 L820 920 L739 870 L739 102 Z" fill="white" fill-opacity="0.5"/>
+
+  <!-- 顶面 -->
+  <path d="M204 153 L285 102 L739 102 L820 153 L739 184 L285 184 Z" fill="white" fill-opacity="0.9"/>
+
+  <!-- 抽屉1 -->
+  <rect x="266" y="225" width="492" height="184" rx="30" fill="#3b82f6" fill-opacity="0.5"/>
+  <rect x="450" y="286" width="124" height="62" rx="30" fill="white" fill-opacity="0.9"/>
+
+  <!-- 抽屉2 -->
+  <rect x="266" y="450" width="492" height="184" rx="30" fill="#3b82f6" fill-opacity="0.6"/>
+  <rect x="450" y="512" width="124" height="62" rx="30" fill="white" fill-opacity="0.9"/>
+
+  <!-- 抽屉3 -->
+  <rect x="266" y="675" width="492" height="184" rx="30" fill="#3b82f6" fill-opacity="0.7"/>
+  <rect x="450" y="737" width="124" height="62" rx="30" fill="white" fill-opacity="0.9"/>
+</svg>
