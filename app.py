@@ -140,7 +140,7 @@ class CmdBoxApp:
             if has_update and not self.config_service.is_in_update_remind_period():
                 self.page.run_task(self._show_update_dialog, latest_ver, notes or "")
 
-        thread = threading.Thread(target=check)
+        thread = threading.Thread(target=check, daemon=True)
         thread.start()
 
     def _get_latest_version_sync(self):
@@ -750,6 +750,8 @@ def main(page: ft.Page):
     def on_window_event(e):
         if e.data == "close":
             page.window_destroy()
+            import sys
+            sys.exit(0)
 
     page.on_window_event = on_window_event
 
