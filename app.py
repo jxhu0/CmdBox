@@ -1,5 +1,5 @@
 # app.py
-__version__ = "1.0.34"
+__version__ = "1.0.35"
 
 import flet as ft
 from pathlib import Path
@@ -752,7 +752,18 @@ def main(page: ft.Page):
         if e.data == "close":
             page.window_destroy()
             import os
-            os._exit(0)  # 强制退出所有进程，包括 Flet 内部进程
+            import sys
+            # Windows 需要额外处理 Flet 子进程
+            if sys.platform == "win32":
+                try:
+                    import subprocess
+                    # 获取当前进程 PID，终止所有子进程
+                    current_pid = os.getpid()
+                    subprocess.run(['taskkill', '/F', '/T', '/PID', str(current_pid)],
+                                   capture_output=True, timeout=5)
+                except Exception:
+                    pass
+            os._exit(0)
 
     page.on_window_event = on_window_event
 
