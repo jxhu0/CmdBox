@@ -1,5 +1,5 @@
 # app.py
-__version__ = "1.0.29"
+__version__ = "1.0.30"
 
 import flet as ft
 from pathlib import Path

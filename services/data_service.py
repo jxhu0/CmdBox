@@ -242,7 +242,7 @@ class DataService:
         # UTF-8 BOM for Excel compatibility
         output.write("\ufeff")
 
-        writer = csv.writer(output, quoting=csv.QUOTE_ALL)
+        writer = csv.writer(output, quoting=csv.QUOTE_ALL, lineterminator='\n')
         writer.writerow(["title", "description", "content", "board", "tags", "is_favorite", "created_at", "updated_at"])
 
         for c in commands:
