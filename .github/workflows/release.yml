@@ -20,7 +20,7 @@ jobs:
           - os: windows-latest
             platform: windows
             artifact_name: CmdBox-windows
-            output_name: CmdBox.zip
+            output_name: CmdBox.exe
 
     runs-on: ${{ matrix.os }}
 
@@ -46,19 +46,13 @@ jobs:
       - name: Build Windows
         if: matrix.platform == 'windows'
         run: |
-          pyinstaller --name CmdBox --windowed --onedir --icon assets/icon.ico --hidden-import=pyperclip --hidden-import=pyperclip.__init__ main.py
+          pyinstaller --name CmdBox --windowed --onefile --icon assets/icon.ico --hidden-import=pyperclip --hidden-import=pyperclip.__init__ main.py
 
       - name: Create zip for macOS
         if: matrix.os == 'macos-latest'
         run: |
           cd dist
           zip -r CmdBox.zip CmdBox.app
-
-      - name: Create zip for Windows
-        if: matrix.os == 'windows-latest'
-        run: |
-          cd dist
-          powershell Compress-Archive -Path CmdBox -DestinationPath CmdBox.zip
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -92,7 +86,7 @@ jobs:
         with:
           files: |
             artifacts/macos/CmdBox.zip
-            artifacts/windows/CmdBox.zip
+            artifacts/windows/CmdBox.exe
           draft: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
