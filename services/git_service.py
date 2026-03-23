@@ -87,6 +87,12 @@ class GitService:
             if remote_branch not in [ref.name for ref in origin.refs]:
                 return True, "远程没有对应分支，跳过拉取"
 
+            # 检查是否有未完成的合并，如果有则先中止
+            merge_head_path = Path(repo.git_dir) / "MERGE_HEAD"
+            if merge_head_path.exists():
+                repo.git.merge("--abort")
+                return False, "拉取失败：存在未完成的合并操作，已清理。请重试。"
+
             # 尝试拉取，使用 --allow-unrelated-histories 允许合并不相关的历史
             try:
                 repo.git.pull("origin", target_branch, "--allow-unrelated-histories", "--no-rebase")
@@ -94,10 +100,10 @@ class GitService:
                 error_msg = str(e)
                 # 如果是合并冲突，需要特殊处理
                 if "CONFLICT" in error_msg.upper() or "Merge conflict" in error_msg:
-                    # 尝试使用本地版本解决冲突
-                    repo.git.checkout("--ours", ".")
-                    repo.index.commit("Merge: keep local changes")
-                    return True, "拉取完成（已保留本地更改）"
+                    # 暂存所有文件并完成合并提交
+                    repo.git.add(".")
+                    repo.git.commit("-m", "Merge: keep local and remote changes")
+                    return True, "拉取完成（已合并本地和远程更改）"
                 raise e
 
             return True, "拉取成功"
