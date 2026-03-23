@@ -41,7 +41,7 @@ class Sidebar(ft.Container):
                 content=ft.Row([
                     ft.Container(
                         content=ft.Icon(ft.Icons.STAR, size=16, color=ft.Colors.AMBER),
-                        margin=ft.margin.only(left=-4)  # 往左偏移，对齐其他板块图标
+                        margin=ft.margin.only(left=-7)  # 往左偏移，对齐其他板块图标
                     ),
                     ft.Container(width=2),  # 占位保持对齐
                     ft.Text("收藏", size=13, weight=ft.FontWeight.W_600 if is_selected else ft.FontWeight.NORMAL,
