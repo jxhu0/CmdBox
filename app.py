@@ -1,5 +1,5 @@
 # app.py
-__version__ = "1.0.33"
+__version__ = "1.0.34"
 
 import flet as ft
 from pathlib import Path
@@ -751,8 +751,8 @@ def main(page: ft.Page):
     def on_window_event(e):
         if e.data == "close":
             page.window_destroy()
-            import sys
-            sys.exit(0)
+            import os
+            os._exit(0)  # 强制退出所有进程，包括 Flet 内部进程
 
     page.on_window_event = on_window_event
 
