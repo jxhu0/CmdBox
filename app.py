@@ -1,5 +1,5 @@
 # app.py
-__version__ = "1.0.32"
+__version__ = "1.0.33"
 
 import flet as ft
 from pathlib import Path
@@ -592,8 +592,9 @@ class CmdBoxApp:
 
             if success:
                 self.config_service.update_last_sync()
-
-            self._show_snack_bar(msg)
+                self._show_snack_bar("同步成功，重启应用后生效")
+            else:
+                self._show_snack_bar(msg)
         except Exception as ex:
             self._show_snack_bar(f"同步失败: {str(ex)}")
 
