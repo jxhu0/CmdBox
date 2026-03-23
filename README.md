@@ -1,14 +1,10 @@
 # CmdBox
 
+![](https://img.shields.io/badge/version-v1.0.34-blue)
+![](https://img.shields.io/badge/license-MIT-green)
+![](https://img.shields.io/badge/last_update-2026--03--23-orange)
+
 一款用于保存和管理命令行指令及大模型 Prompt 的桌面应用。
-
-## 基本信息
-
-| 项目 | 内容 |
-|------|------|
-| **版本** | v1.0.34 |
-| **最后更新** | 2026-03-23 |
-| **许可证** | MIT License |
 
 ## 功能
 
