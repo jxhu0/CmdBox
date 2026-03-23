@@ -89,7 +89,7 @@ class GitService:
 
             # 尝试拉取，使用 --allow-unrelated-histories 允许合并不相关的历史
             try:
-                repo.git.pull("origin", target_branch, "--allow-unrelated-histories")
+                repo.git.pull("origin", target_branch, "--allow-unrelated-histories", "--no-rebase")
             except Exception as e:
                 error_msg = str(e)
                 # 如果是合并冲突，需要特殊处理
