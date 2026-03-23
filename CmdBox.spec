@@ -2,11 +2,11 @@
 
 
 a = Analysis(
-    ['main.py'],
+    ['app.py'],
     pathex=[],
     binaries=[],
     datas=[],
-    hiddenimports=[],
+    hiddenimports=['pyperclip', 'pyperclip.__init__'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -19,26 +19,33 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='CmdBox',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=['assets/icon.icns'],
+)
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='CmdBox',
 )
 app = BUNDLE(
-    exe,
+    coll,
     name='CmdBox.app',
-    icon=None,
+    icon='assets/icon.icns',
     bundle_identifier=None,
 )
