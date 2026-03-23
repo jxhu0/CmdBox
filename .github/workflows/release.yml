@@ -71,10 +71,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download all artifacts
+      - name: Download macOS artifacts
         uses: actions/download-artifact@v4
         with:
-          path: artifacts/
+          name: CmdBox-macos
+          path: artifacts/macos
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: CmdBox-windows
+          path: artifacts/windows
 
       - name: List artifacts
         run: |
@@ -84,8 +91,8 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/CmdBox-macos/CmdBox.zip
-            artifacts/CmdBox-windows/CmdBox.zip
+            artifacts/macos/CmdBox.zip
+            artifacts/windows/CmdBox.zip
           draft: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
