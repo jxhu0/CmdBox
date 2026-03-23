@@ -36,7 +36,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install flet-cli pyinstaller
+          pip install flet-cli pyinstaller flet-desktop
 
       - name: Build ${{ matrix.platform }}
         run: |
