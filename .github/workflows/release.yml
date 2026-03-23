@@ -38,13 +38,15 @@ jobs:
           pip install -r requirements.txt
           pip install flet-cli pyinstaller flet-desktop Pillow
 
-      - name: Build ${{ matrix.platform }}
+      - name: Build macOS
+        if: matrix.platform == 'macos'
         run: |
-          if [ "${{ matrix.platform }}" = "macos" ]; then
-            pyinstaller --name CmdBox --windowed --onedir --icon assets/icon.icns --hidden-import=pyperclip --hidden-import=pyperclip.__init__ main.py
-          else
-            pyinstaller --name CmdBox --windowed --onedir --icon assets/icon.ico --hidden-import=pyperclip --hidden-import=pyperclip.__init__ main.py
-          fi
+          pyinstaller --name CmdBox --windowed --onedir --icon assets/icon.icns --hidden-import=pyperclip --hidden-import=pyperclip.__init__ main.py
+
+      - name: Build Windows
+        if: matrix.platform == 'windows'
+        run: |
+          pyinstaller --name CmdBox --windowed --onedir --icon assets/icon.ico --hidden-import=pyperclip --hidden-import=pyperclip.__init__ main.py
 
       - name: Create zip for macOS
         if: matrix.os == 'macos-latest'
