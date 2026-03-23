@@ -39,10 +39,8 @@ class Sidebar(ft.Container):
             is_selected = self.selected_board_id == self.favorites_board_id
             fav_item = ft.Container(
                 content=ft.Row([
-                    ft.Container(
-                        content=ft.Text("⭐", size=16),
-                        margin=ft.margin.only(left=-6)  # 往左偏移一点，对齐其他板块
-                    ),
+                    ft.Icon(ft.Icons.STAR, size=16, color=ft.Colors.AMBER),
+                    ft.Container(width=2),  # 替代 emoji 占位
                     ft.Text("收藏", size=13, weight=ft.FontWeight.W_600 if is_selected else ft.FontWeight.NORMAL,
                             color=ft.Colors.AMBER_700 if is_selected else ft.Colors.GREY_700),
                     ft.Container(content=None, expand=True)  # 空置位，保持对齐
