@@ -1,5 +1,5 @@
 # app.py
-__version__ = "1.0.38"
+__version__ = "1.0.39"
 
 import flet as ft
 from pathlib import Path
@@ -459,6 +459,7 @@ class CmdBoxApp:
             "新建指令",
             boards=self.data_service.boards,
             selected_board_id=self.selected_board_id,
+            existing_tags=self._get_all_tags(),
             on_save=on_save
         )
         self.page.show_dialog(dialog)
@@ -519,6 +520,7 @@ class CmdBoxApp:
             "编辑指令",
             boards=self.data_service.boards,
             command=command,
+            existing_tags=self._get_all_tags(),
             on_save=on_save
         )
         self.page.show_dialog(dialog)

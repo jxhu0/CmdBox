@@ -169,12 +169,15 @@ class CommandDialog(ft.AlertDialog):
         boards: List[Board],
         command: Optional[Command] = None,
         selected_board_id: Optional[str] = None,
+        existing_tags: List[str] = None,
         on_save: Callable = None
     ):
         super().__init__()
         self.command = command
         self.boards = boards
         self.on_save_callback = on_save
+        self.existing_tags = existing_tags or []
+        self.selected_tags = list(command.tags) if command and command.tags else []
 
         self.modal = True
         self.title = ft.Text(title)
@@ -212,28 +215,87 @@ class CommandDialog(ft.AlertDialog):
         )
 
         self.tags_field = ft.TextField(
-            label="标签（逗号分隔）",
-            value=", ".join(command.tags) if command and command.tags else ""
+            label="标签（逗号分隔，或点击下方标签选择）",
+            value=", ".join(self.selected_tags),
+            on_change=self._on_tags_text_change
         )
+
+        # 已有标签选择区域
+        self.tags_chips_row = ft.Row(wrap=True, spacing=6)
+        self._build_tag_chips()
 
         self.favorite_checkbox = ft.Checkbox(
             label="添加到收藏",
             value=command.is_favorite if command else False
         )
 
-        self.content = ft.Column([
+        content_controls = [
             self.title_field,
             self.board_dropdown,
             self.content_field,
             self.description_field,
             self.tags_field,
-            self.favorite_checkbox
-        ], tight=True, scroll=ft.ScrollMode.AUTO)
+        ]
+
+        # 仅当有已有标签时显示选择区域
+        if self.existing_tags:
+            content_controls.append(ft.Text("已有标签（点击选择）", size=11, color=ft.Colors.GREY_500))
+            content_controls.append(self.tags_chips_row)
+
+        content_controls.append(self.favorite_checkbox)
+
+        self.content = ft.Column(content_controls, tight=True, scroll=ft.ScrollMode.AUTO)
 
         self.actions = [
             ft.TextButton("取消", on_click=self._on_cancel),
             ft.TextButton("保存", on_click=self._on_save)
         ]
+
+    def _build_tag_chips(self):
+        """构建标签选择 chips"""
+        chips = []
+        for tag in self.existing_tags:
+            is_selected = tag in self.selected_tags
+            chip = ft.Container(
+                content=ft.Text(tag, size=11, color=ft.Colors.BLUE_700 if is_selected else ft.Colors.GREY_600),
+                bgcolor=ft.Colors.BLUE_100 if is_selected else ft.Colors.GREY_100,
+                padding=ft.padding.symmetric(horizontal=10, vertical=5),
+                border_radius=12,
+                on_click=lambda e, t=tag: self._on_tag_click(t),
+                data=tag
+            )
+            chips.append(chip)
+        self.tags_chips_row.controls = chips
+
+    def _on_tag_click(self, tag: str):
+        """点击标签切换选中状态"""
+        if tag in self.selected_tags:
+            self.selected_tags.remove(tag)
+        else:
+            self.selected_tags.append(tag)
+        self._update_tags_field()
+        self._build_tag_chips()
+        self.tags_chips_row.update()
+
+    def _toggle_tag(self, tag: str, selected: bool):
+        """切换标签选中状态"""
+        if selected and tag not in self.selected_tags:
+            self.selected_tags.append(tag)
+        elif not selected and tag in self.selected_tags:
+            self.selected_tags.remove(tag)
+        self._update_tags_field()
+
+    def _update_tags_field(self):
+        """更新标签输入框"""
+        self.tags_field.value = ", ".join(self.selected_tags)
+        self.tags_field.update()
+
+    def _on_tags_text_change(self, e):
+        """标签文本变化时同步选中状态"""
+        tags_str = e.control.value or ""
+        self.selected_tags = [t.strip() for t in tags_str.split(",") if t.strip()]
+        self._build_tag_chips()
+        self.tags_chips_row.update()
 
     def _on_cancel(self, e):
         if self.page:

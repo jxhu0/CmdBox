@@ -143,7 +143,7 @@ class CommandCard(ft.Container):
         content_and_tags_controls = [content_text]
 
         # 添加标签
-        for tag in self.command.tags[:3]:
+        for tag in self.command.tags:
             bg_color, text_color = get_tag_colors(tag)
             content_and_tags_controls.append(
                 ft.Container(
