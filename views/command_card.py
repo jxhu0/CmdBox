@@ -118,13 +118,13 @@ class CommandCard(ft.Container):
             ft.Icon(ft.Icons.STAR if self.command.is_favorite else ft.Icons.STAR_BORDER,
                     color=ft.Colors.AMBER if self.command.is_favorite else ft.Colors.GREY_400,
                     size=18),
-            ft.Text(self.command.title, size=15, weight=ft.FontWeight.W_600, color=ft.Colors.GREY_800),
+            ft.Text(self.command.title, size=15, weight=ft.FontWeight.W_600, color=ft.Colors.GREY_800, selectable=True),
         ]
 
         # 如果有描述，添加到标题行
         if self.command.description:
             title_controls.append(
-                ft.Text("· " + self.command.description, size=12, color=ft.Colors.GREY_500)
+                ft.Text("· " + self.command.description, size=12, color=ft.Colors.GREY_500, selectable=True)
             )
 
         title_row = ft.Row(title_controls, wrap=True, spacing=4)
@@ -135,7 +135,8 @@ class CommandCard(ft.Container):
             display_content,
             size=13,
             color=ft.Colors.GREY_600,
-            font_family="monospace"
+            font_family="monospace",
+            selectable=True
         )
 
         # 构建内容和标签的控件列表
