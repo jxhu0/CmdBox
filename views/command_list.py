@@ -72,6 +72,9 @@ class CommandList(ft.Column):
             )
             cards.append(card)
 
+        # 添加底部占位，为 FAB 按钮预留空间
+        cards.append(ft.Container(height=80))
+
         return cards
 
     def update_commands(self, commands: List[Command]):
