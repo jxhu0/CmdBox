@@ -136,12 +136,8 @@ class GitService:
                 except Exception as e:
                     return False, f"切换分支失败: {e}"
 
-            # 尝试推送，设置上游分支
-            try:
-                origin.push(target_branch)
-            except Exception:
-                # 可能是首次推送，需要设置上游分支
-                repo.git.push("--set-upstream", "origin", target_branch)
+            # 直接使用 git push 命令，确保设置上游分支
+            repo.git.push("--set-upstream", "origin", target_branch)
 
             return True, "推送成功"
         except Exception as e:
