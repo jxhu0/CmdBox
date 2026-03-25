@@ -1,5 +1,5 @@
 # app.py
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 import flet as ft
 from pathlib import Path
@@ -580,6 +580,7 @@ class CmdBoxApp:
 
     def _on_sync(self, e):
         """同步"""
+        syncing_snack = None
         try:
             # 先保存当前数据
             self.data_service.save()
@@ -589,8 +590,26 @@ class CmdBoxApp:
                 self._show_snack_bar("未配置远程仓库，请在设置中配置 Git 远程地址", 6000)
                 return
 
+            # 显示同步中提示
+            syncing_snack = ft.SnackBar(
+                content=ft.Row([
+                    ft.ProgressRing(width=16, height=16, stroke_width=2, color=ft.Colors.WHITE),
+                    ft.Text("正在同步...", size=14)
+                ], spacing=10),
+                duration=60000
+            )
+            self.page.overlay.append(syncing_snack)
+            syncing_snack.open = True
+            self.page.update()
+
             # 执行同步
             success, msg = self.git_service.sync(self.data_service)
+
+            # 关闭同步中提示
+            syncing_snack.open = False
+            if syncing_snack in self.page.overlay:
+                self.page.overlay.remove(syncing_snack)
+            self.page.update()
 
             if success:
                 self.config_service.update_last_sync()
@@ -598,6 +617,12 @@ class CmdBoxApp:
             else:
                 self._show_snack_bar(msg, 8000)
         except Exception as ex:
+            # 确保关闭同步中提示
+            if syncing_snack:
+                syncing_snack.open = False
+                if syncing_snack in self.page.overlay:
+                    self.page.overlay.remove(syncing_snack)
+                self.page.update()
             self._show_snack_bar(f"同步失败: {str(ex)}", 8000)
 
     def _on_export_click(self, e):
@@ -690,9 +715,11 @@ set thePath to POSIX path of (choose file name default name "{filename}" with pr
             message: 提示消息
             duration: 显示时长（毫秒），默认 4000ms
         """
+        # 清理 overlay 中已关闭的 SnackBar
+        self.page.overlay[:] = [c for c in self.page.overlay if not isinstance(c, ft.SnackBar) or getattr(c, 'open', False)]
+
         snack_bar = ft.SnackBar(content=ft.Text(message), duration=duration)
-        if snack_bar not in self.page.overlay:
-            self.page.overlay.append(snack_bar)
+        self.page.overlay.append(snack_bar)
         snack_bar.open = True
         self.page.update()
 
