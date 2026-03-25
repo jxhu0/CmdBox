@@ -586,7 +586,7 @@ class CmdBoxApp:
 
             # 检查是否有远程仓库
             if not self.git_service.has_remote():
-                self._show_snack_bar("未配置远程仓库，请在设置中配置 Git 远程地址")
+                self._show_snack_bar("未配置远程仓库，请在设置中配置 Git 远程地址", 6000)
                 return
 
             # 执行同步
@@ -596,9 +596,9 @@ class CmdBoxApp:
                 self.config_service.update_last_sync()
                 self._show_snack_bar("同步成功，重启应用后生效")
             else:
-                self._show_snack_bar(msg)
+                self._show_snack_bar(msg, 8000)
         except Exception as ex:
-            self._show_snack_bar(f"同步失败: {str(ex)}")
+            self._show_snack_bar(f"同步失败: {str(ex)}", 8000)
 
     def _on_export_click(self, e):
         """点击导出按钮"""
@@ -683,9 +683,14 @@ set thePath to POSIX path of (choose file name default name "{filename}" with pr
                 self._show_snack_bar(f"导出失败：{str(ex)}")
         self.page.update()
 
-    def _show_snack_bar(self, message: str):
-        """显示 SnackBar"""
-        snack_bar = ft.SnackBar(content=ft.Text(message))
+    def _show_snack_bar(self, message: str, duration: int = 4000):
+        """显示 SnackBar
+
+        Args:
+            message: 提示消息
+            duration: 显示时长（毫秒），默认 4000ms
+        """
+        snack_bar = ft.SnackBar(content=ft.Text(message), duration=duration)
         if snack_bar not in self.page.overlay:
             self.page.overlay.append(snack_bar)
         snack_bar.open = True
