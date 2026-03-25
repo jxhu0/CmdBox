@@ -173,7 +173,7 @@ class GitService:
             return False, f"设置失败: {e}"
 
     def sync(self, data_service=None) -> Tuple[bool, str]:
-        """同步：备份 -> 拉取 -> 提交 -> 推送"""
+        """同步：备份 -> 提交 -> 拉取 -> 推送"""
         # 同步前先创建备份
         if data_service:
             try:
@@ -182,13 +182,14 @@ class GitService:
             except Exception as e:
                 print(f"备份失败: {e}")
 
-        # 先拉取
-        success, msg = self.pull()
-        if not success:
+        # 先提交本地更改（避免 pull 时冲突）
+        success, msg = self.commit(f"Sync at {datetime.now().isoformat()}")
+        if not success and "没有更改" not in msg:
+            # 只有真正的错误才返回，"没有更改"不算错误
             return False, msg
 
-        # 提交本地更改
-        success, msg = self.commit(f"Sync at {datetime.now().isoformat()}")
+        # 拉取远程更改
+        success, msg = self.pull()
         if not success:
             return False, msg
 
