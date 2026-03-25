@@ -551,32 +551,26 @@ class CmdBoxApp:
         if self._is_moving:
             return
         self._is_moving = True
-        self.data_service.move_command_up(command.id)
-        # 直接获取筛选后的命令列表并刷新显示
-        commands = self.data_service.search_commands(
-            self.search_keyword,
-            self.search_board_ids,
-            self.search_tag
-        )
-        self.command_list.update_commands(commands)
-        self.page.update()
-        self._is_moving = False
+        try:
+            # 获取当前板块 ID（如果不是收藏板块）
+            board_id = None if self.show_favorites_only else self.selected_board_id
+            self.data_service.move_command_up(command.id, board_id)
+            self._refresh_commands()
+        finally:
+            self._is_moving = False
 
     def _on_move_down(self, command: Command):
         """下移指令"""
         if self._is_moving:
             return
         self._is_moving = True
-        self.data_service.move_command_down(command.id)
-        # 直接获取筛选后的命令列表并刷新显示
-        commands = self.data_service.search_commands(
-            self.search_keyword,
-            self.search_board_ids,
-            self.search_tag
-        )
-        self.command_list.update_commands(commands)
-        self.page.update()
-        self._is_moving = False
+        try:
+            # 获取当前板块 ID（如果不是收藏板块）
+            board_id = None if self.show_favorites_only else self.selected_board_id
+            self.data_service.move_command_down(command.id, board_id)
+            self._refresh_commands()
+        finally:
+            self._is_moving = False
 
     def _on_sync(self, e):
         """同步"""

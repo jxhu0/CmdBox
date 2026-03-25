@@ -139,20 +139,40 @@ class DataService:
         self.commands = [c for c in self.commands if c.id != command_id]
         self.save()
 
-    def move_command_up(self, command_id: str):
-        """将指令上移一位"""
-        for i in range(1, len(self.commands)):
-            if self.commands[i].id == command_id:
-                self.commands[i - 1], self.commands[i] = self.commands[i], self.commands[i - 1]
+    def move_command_up(self, command_id: str, board_id: str = None):
+        """将指令在当前板块内上移一位"""
+        # 获取当前板块内的命令
+        if board_id:
+            board_commands = [(i, c) for i, c in enumerate(self.commands) if c.board_id == board_id]
+        else:
+            board_commands = [(i, c) for i, c in enumerate(self.commands)]
+
+        for local_idx, (global_idx, cmd) in enumerate(board_commands):
+            if cmd.id == command_id and local_idx > 0:
+                # 获取前一个命令的全局索引
+                prev_global_idx = board_commands[local_idx - 1][0]
+                # 交换位置
+                self.commands[global_idx], self.commands[prev_global_idx] = \
+                    self.commands[prev_global_idx], self.commands[global_idx]
                 self.save()
                 return True
         return False
 
-    def move_command_down(self, command_id: str):
-        """将指令下移一位"""
-        for i in range(len(self.commands) - 1):
-            if self.commands[i].id == command_id:
-                self.commands[i], self.commands[i + 1] = self.commands[i + 1], self.commands[i]
+    def move_command_down(self, command_id: str, board_id: str = None):
+        """将指令在当前板块内下移一位"""
+        # 获取当前板块内的命令
+        if board_id:
+            board_commands = [(i, c) for i, c in enumerate(self.commands) if c.board_id == board_id]
+        else:
+            board_commands = [(i, c) for i, c in enumerate(self.commands)]
+
+        for local_idx, (global_idx, cmd) in enumerate(board_commands):
+            if cmd.id == command_id and local_idx < len(board_commands) - 1:
+                # 获取后一个命令的全局索引
+                next_global_idx = board_commands[local_idx + 1][0]
+                # 交换位置
+                self.commands[global_idx], self.commands[next_global_idx] = \
+                    self.commands[next_global_idx], self.commands[global_idx]
                 self.save()
                 return True
         return False
