@@ -70,17 +70,20 @@ class UpdateDialog(ft.AlertDialog):
         self.actions_alignment = ft.MainAxisAlignment.END
 
     def _on_cancel(self, e):
-        self.open = False
-        self.update()
+        if self.page:
+            self.page.pop_dialog()
+            self.page.update()
 
     def _on_remind_later(self, e):
         if self.on_remind_later:
             self.on_remind_later()
-        self.open = False
-        self.update()
+        if self.page:
+            self.page.pop_dialog()
+            self.page.update()
 
     def _on_download(self, e):
         url = "https://github.com/jxhu0/CmdBox/releases"
         webbrowser.open(url)
-        self.open = False
-        self.update()
+        if self.page:
+            self.page.pop_dialog()
+            self.page.update()
