@@ -79,8 +79,13 @@ class GitService:
             # 尝试获取远程分支信息
             try:
                 origin.fetch()
-            except Exception:
-                return True, "无法获取远程信息，跳过拉取"
+            except Exception as e:
+                # fetch 失败时不跳过拉取，而是返回失败让用户重试
+                error_msg = str(e)
+                if "Could not connect" in error_msg or "Connection" in error_msg or "timed out" in error_msg.lower():
+                    return False, f"网络连接失败，请检查网络后重试"
+                # 其他错误也返回失败，不跳过
+                return False, f"获取远程信息失败: {error_msg}"
 
             # 检查远程是否有 main 分支
             remote_branch = f"origin/{target_branch}"
