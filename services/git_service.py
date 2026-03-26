@@ -1,5 +1,6 @@
 # services/git_service.py
 import os
+import gc
 from typing import Optional, Tuple
 from pathlib import Path
 from datetime import datetime
@@ -11,6 +12,7 @@ class GitService:
     def __init__(self, repo_path: str):
         self.repo_path = Path(repo_path)
         self._git = None
+        self._repo = None
 
     @property
     def git(self):
@@ -19,6 +21,23 @@ class GitService:
             import git
             self._git = git
         return self._git
+
+    def _get_repo(self):
+        """获取 Repo 对象"""
+        if self._repo is None:
+            self._repo = self.git.Repo(self.repo_path)
+        return self._repo
+
+    def cleanup(self):
+        """清理资源，关闭 Repo 对象"""
+        if self._repo is not None:
+            try:
+                self._repo.close()
+            except Exception:
+                pass
+            self._repo = None
+        # 强制垃圾回收，确保清理 git 子进程
+        gc.collect()
 
     def is_repo(self) -> bool:
         """检查是否是 Git 仓库"""

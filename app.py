@@ -784,6 +784,12 @@ def main(page: ft.Page):
     # 处理窗口关闭事件，确保程序正确退出
     def on_window_event(e):
         if e.data == "close":
+            # 清理 Git 资源
+            try:
+                app.git_service.cleanup()
+            except Exception:
+                pass
+
             page.window_destroy()
             import os
             import sys
