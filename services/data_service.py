@@ -106,6 +106,14 @@ class DataService:
     def update_board(self, board: Board):
         self.save()
 
+    def reorder_boards(self, board_ids: List[str]):
+        """根据给定的 ID 顺序重新排列板块"""
+        # 创建 ID 到板块的映射
+        board_map = {b.id: b for b in self.boards}
+        # 按新顺序重建列表
+        self.boards = [board_map[bid] for bid in board_ids if bid in board_map]
+        self.save()
+
     def delete_board(self, board_id: str) -> int:
         """删除板块，返回被删除的指令数量"""
         self.boards = [b for b in self.boards if b.id != board_id]

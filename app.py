@@ -234,6 +234,7 @@ class CmdBoxApp:
             on_add_board=self._on_add_board,
             on_edit_board=self._on_edit_board,
             on_delete_board=self._on_delete_board,
+            on_reorder_boards=self._on_reorder_boards,
             selected_board_id=self.selected_board_id,
             favorites_board_id=self.FAVORITES_BOARD_ID
         )
@@ -434,6 +435,11 @@ class CmdBoxApp:
         )
         self.page.show_dialog(dialog)
         self.page.update()
+
+    def _on_reorder_boards(self, board_ids: list):
+        """处理板块拖拽重排序"""
+        self.data_service.reorder_boards(board_ids)
+        self._refresh_sidebar()
 
     def _on_add_command(self):
         """添加指令"""
