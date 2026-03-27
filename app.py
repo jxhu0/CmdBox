@@ -35,15 +35,15 @@ class CmdBoxApp:
         self.git_service: Optional[GitService] = None
         self.clipboard_service = ClipboardService()
 
+        # 收藏板块ID（虚拟板块，不存储在数据中）
+        self.FAVORITES_BOARD_ID = "__favorites__"
+
         # 状态
-        self.selected_board_id: Optional[str] = None
+        self.selected_board_id: Optional[str] = self.FAVORITES_BOARD_ID
+        self.show_favorites_only: bool = True  # 初始显示收藏板块
         self.search_keyword: str = ""
         self.search_board_ids: Optional[List[str]] = None
         self.search_tag: Optional[str] = None
-        self.show_favorites_only: bool = False  # 是否只显示收藏
-
-        # 收藏板块ID（虚拟板块，不存储在数据中）
-        self.FAVORITES_BOARD_ID = "__favorites__"
 
         # 移动指令时的防重复点击标志
         self._is_moving: bool = False
