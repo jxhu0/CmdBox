@@ -1,8 +1,8 @@
 # CmdBox
 
-![](https://img.shields.io/badge/version-v1.1.6-blue)
+![](https://img.shields.io/badge/version-v1.1.7-blue)
 ![](https://img.shields.io/badge/license-MIT-green)
-![](https://img.shields.io/badge/last_update-2026--03--27-orange)
+![](https://img.shields.io/badge/last_update-2026--03--31-orange)
 
 一款用于保存和管理命令行指令及大模型 Prompt 的桌面应用。
 
