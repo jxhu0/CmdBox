@@ -1,5 +1,5 @@
 # app.py
-__version__ = "1.1.7"
+__version__ = "1.1.8"
 
 import flet as ft
 from pathlib import Path
@@ -71,8 +71,8 @@ class CmdBoxApp:
             # macOS 使用苹方字体
             font_family = "PingFang SC"
         elif system == "Windows":
-            # Windows 使用微软雅黑
-            font_family = "Microsoft YaHei"
+            # Windows 使用楷体
+            font_family = "KaiTi"
         else:
             # Linux 等其他系统
             font_family = "Source Han Sans SC"
