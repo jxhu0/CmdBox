@@ -50,6 +50,10 @@ TAG_COLORS = {
     "cc": (ft.Colors.LIME_100, ft.Colors.LIME_800),
     "claw": (ft.Colors.AMBER_100, ft.Colors.AMBER_800),
     "tool": (ft.Colors.PINK_100, ft.Colors.PINK_800),
+    "data": (ft.Colors.BLUE_100, ft.Colors.BLUE_800),
+    "hk": (ft.Colors.RED_100, ft.Colors.RED_800),
+    "stats": (ft.Colors.TEAL_100, ft.Colors.TEAL_800),
+    "alpha": (ft.Colors.AMBER_100, ft.Colors.AMBER_800),
 }
 
 
