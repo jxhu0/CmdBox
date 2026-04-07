@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CmdBox — 命令行指令管理工具</title>
+<meta name="description" content="CmdBox 是一款专为开发者打造的命令行指令与大模型 Prompt 管理工具。分类存储、一键复制、Git 同步，让常用指令触手可及。">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{font-family:'DM Sans',-apple-system,BlinkMacSystemFont,sans-serif;background:#07090F;color:#F8FAFC;overflow-x:hidden}
+
+  .bg-grid{position:fixed;inset:0;background-image:radial-gradient(circle at 1px 1px,rgba(255,255,255,.03) 1px,transparent 0);background-size:40px 40px;pointer-events:none;z-index:0}
+  .bg-glow-1{position:fixed;top:-300px;left:-200px;width:700px;height:700px;background:radial-gradient(circle,rgba(59,130,246,.08) 0%,transparent 60%);pointer-events:none;z-index:0}
+  .bg-glow-2{position:fixed;bottom:-300px;right:-200px;width:700px;height:700px;background:radial-gradient(circle,rgba(139,92,246,.06) 0%,transparent 60%);pointer-events:none;z-index:0}
+
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+  @keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
+  @keyframes fade-up{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+
+  .animate-on-scroll{opacity:0;transform:translateY(24px);transition:opacity .6s cubic-bezier(.16,1,.3,1),transform .6s cubic-bezier(.16,1,.3,1)}
+  .animate-on-scroll.visible{opacity:1;transform:translateY(0)}
+
+  @media(prefers-reduced-motion:reduce){
+    .app-mockup{animation:none!important}
+    .animate-on-scroll{transition:none!important;opacity:1!important;transform:none!important}
+    .hero-badge-dot{animation:none!important}
+    .hero-badge,.hero h1,.hero p,.hero-buttons,.stats-bar,.mockup-section{animation:none!important;opacity:1!important;transform:none!important}
+  }
+
+  .nav{position:fixed;top:16px;left:16px;right:16px;z-index:50;backdrop-filter:blur(20px) saturate(180%);background:rgba(7,9,15,.7);border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:0 20px;animation:fade-up .6s ease-out}
+  .nav-inner{max-width:1168px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:56px}
+  .nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none;color:#F8FAFC}
+  .nav-logo svg{width:30px;height:30px}
+  .nav-logo span{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:18px;letter-spacing:-.5px}
+  .nav-links{display:flex;align-items:center;gap:6px}
+  .nav-links a{color:#94A3B8;text-decoration:none;font-size:13px;padding:6px 12px;border-radius:8px;transition:all 200ms ease;cursor:pointer}
+  .nav-links a:hover{color:#F8FAFC;background:rgba(255,255,255,.06)}
+  .nav-github{display:flex;align-items:center;color:#94A3B8;text-decoration:none;padding:6px;border-radius:8px;transition:all 200ms ease;cursor:pointer}
+  .nav-github:hover{color:#F8FAFC;background:rgba(255,255,255,.06)}
+  .nav-lang{color:#64748B;font-size:12px;font-weight:600;padding:5px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.03);cursor:pointer;transition:all 200ms ease;font-family:'JetBrains Mono',monospace;letter-spacing:.5px}
+  .nav-lang:hover{color:#CBD5E1;background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1)}
+  .nav-cta{background:#fff;color:#07090F!important;padding:7px 18px!important;border-radius:8px;font-weight:600!important;font-size:13px;cursor:pointer;transition:all 200ms ease;border:none}
+  .nav-cta:hover{background:#E2E8F0;transform:translateY(-1px)}
+
+  .hero{position:relative;padding:140px 24px 60px;text-align:center;z-index:1}
+  .hero-glow{position:absolute;top:0;left:50%;transform:translateX(-50%);width:900px;height:600px;background:radial-gradient(ellipse at 50% 0%,rgba(99,102,241,.12) 0%,rgba(59,130,246,.06) 40%,transparent 70%);pointer-events:none}
+  .hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.15);padding:5px 4px 5px 16px;border-radius:100px;font-size:13px;color:#60A5FA;margin-bottom:32px;animation:fade-up .6s ease-out .1s both}
+  .hero-badge-dot{width:7px;height:7px;border-radius:50%;background:#22C55E;margin-right:4px;animation:pulse-dot 2s ease-in-out infinite}
+  .hero-badge-version{background:rgba(255,255,255,.08);padding:5px 12px;border-radius:100px;font-size:12px;color:#94A3B8;font-family:'JetBrains Mono',monospace}
+  .hero h1{font-family:'Space Grotesk',sans-serif;font-size:64px;font-weight:700;letter-spacing:-2px;line-height:1.08;margin-bottom:24px;position:relative;animation:fade-up .6s ease-out .2s both}
+  .hero h1 .gradient-text{background:linear-gradient(135deg,#60A5FA 0%,#A78BFA 40%,#F472B6 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+  .hero p{font-size:18px;color:#94A3B8;max-width:540px;margin:0 auto 40px;line-height:1.7;animation:fade-up .6s ease-out .3s both}
+  .hero-buttons{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;animation:fade-up .6s ease-out .4s both}
+  .btn-primary{display:inline-flex;align-items:center;gap:8px;background:#fff;color:#07090F;padding:12px 28px;border-radius:10px;font-weight:600;font-size:15px;text-decoration:none;cursor:pointer;transition:all 200ms ease;border:none;font-family:'DM Sans',sans-serif;box-shadow:0 0 20px rgba(255,255,255,.08)}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(255,255,255,.12)}
+  .btn-secondary{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:#CBD5E1;padding:12px 24px;border-radius:10px;font-weight:500;font-size:14px;text-decoration:none;cursor:pointer;transition:all 200ms ease;font-family:'DM Sans',sans-serif}
+  .btn-secondary:hover{background:rgba(255,255,255,.08);color:#F8FAFC;border-color:rgba(255,255,255,.15)}
+
+  .stats-bar{display:flex;justify-content:center;gap:48px;padding:32px 24px 0;animation:fade-up .6s ease-out .5s both;position:relative;z-index:1}
+  .stat-item{text-align:center}
+  .stat-value{font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:700;color:#F1F5F9;letter-spacing:-.5px}
+  .stat-value .accent{color:#60A5FA}
+  .stat-label{font-size:13px;color:#475569;margin-top:2px}
+  .stat-divider{width:1px;background:rgba(255,255,255,.06);align-self:stretch}
+
+  .mockup-section{max-width:920px;margin:60px auto 0;padding:0 24px;position:relative;z-index:1;animation:fade-up .8s ease-out .6s both}
+  .app-mockup{background:#0E1219;border:1px solid rgba(255,255,255,.08);border-radius:16px;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.04),0 24px 80px -12px rgba(0,0,0,.5),0 0 60px -10px rgba(59,130,246,.1);animation:float 6s ease-in-out infinite;position:relative}
+  .app-mockup::before{content:'';position:absolute;inset:0;border-radius:16px;padding:1px;background:linear-gradient(180deg,rgba(59,130,246,.15) 0%,transparent 40%);-webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
+  .mockup-titlebar{display:flex;align-items:center;gap:8px;padding:14px 18px;background:rgba(255,255,255,.02);border-bottom:1px solid rgba(255,255,255,.05)}
+  .mockup-dots{display:flex;gap:7px}
+  .mockup-dot{width:11px;height:11px;border-radius:50%}
+  .mockup-dot:nth-child(1){background:#FF5F57}
+  .mockup-dot:nth-child(2){background:#FEBC2E}
+  .mockup-dot:nth-child(3){background:#28C840}
+  .mockup-titlebar-text{flex:1;text-align:center;font-size:12px;color:#475569;font-family:'DM Sans',sans-serif}
+  .mockup-body{padding:16px;min-height:320px;display:flex;gap:12px}
+  .mockup-sidebar{width:170px;flex-shrink:0;background:rgba(255,255,255,.02);border-radius:10px;padding:12px 10px;border:1px solid rgba(255,255,255,.04);display:flex;flex-direction:column;gap:2px}
+  .mockup-sidebar-item{padding:7px 10px;border-radius:6px;font-size:12px;color:#64748B;cursor:pointer;transition:all 150ms ease;display:flex;align-items:center;gap:8px}
+  .mockup-sidebar-item:hover{color:#94A3B8;background:rgba(255,255,255,.03)}
+  .mockup-sidebar-item.active{background:rgba(59,130,246,.12);color:#60A5FA}
+  .mockup-sidebar-item svg{width:14px;height:14px;flex-shrink:0}
+  .mockup-sidebar-divider{height:1px;background:rgba(255,255,255,.04);margin:6px 4px}
+  .mockup-sidebar-label{font-size:10px;color:#334155;text-transform:uppercase;letter-spacing:1.2px;font-weight:600;padding:4px 10px 6px}
+  .mockup-content{flex:1;display:flex;flex-direction:column;gap:8px}
+  .mockup-toolbar{display:flex;align-items:center;gap:8px}
+  .mockup-search{flex:1;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:8px;color:#334155;font-size:12px}
+  .mockup-search svg{width:13px;height:13px;color:#475569}
+  .mockup-search kbd{margin-left:auto;font-size:10px;color:#334155;background:rgba(255,255,255,.04);padding:1px 6px;border-radius:4px;border:1px solid rgba(255,255,255,.06);font-family:'JetBrains Mono',monospace}
+  .mockup-toolbar-btn{width:32px;height:32px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);color:#475569;cursor:pointer}
+  .mockup-toolbar-btn svg{width:14px;height:14px}
+  .mockup-cards{display:flex;flex-direction:column;gap:6px;flex:1}
+  .mockup-card{background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.04);border-radius:9px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;transition:all 150ms ease;cursor:pointer}
+  .mockup-card:hover{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.08)}
+  .mockup-card-left{display:flex;align-items:center;gap:10px}
+  .mockup-card-icon{width:30px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center}
+  .mockup-card-icon svg{width:14px;height:14px}
+  .mockup-card-icon.blue{background:rgba(59,130,246,.12);color:#60A5FA}
+  .mockup-card-icon.purple{background:rgba(139,92,246,.12);color:#A78BFA}
+  .mockup-card-icon.green{background:rgba(34,197,94,.12);color:#4ADE80}
+  .mockup-card-icon.amber{background:rgba(245,158,11,.12);color:#FBBF24}
+  .mockup-card-info{display:flex;flex-direction:column;gap:2px}
+  .mockup-card-title{font-size:12px;color:#CBD5E1;font-weight:500;font-family:'JetBrains Mono',monospace}
+  .mockup-card-desc{font-size:10px;color:#475569}
+  .mockup-card-right{display:flex;align-items:center;gap:6px}
+  .mockup-card-tag{font-size:10px;color:#475569;background:rgba(255,255,255,.03);padding:2px 7px;border-radius:4px}
+  .mockup-card-action{font-size:10px;color:#64748B;cursor:pointer;padding:4px 8px;border-radius:5px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.05);transition:all 150ms ease;display:flex;align-items:center;gap:4px}
+  .mockup-card-action:hover{background:rgba(59,130,246,.1);color:#60A5FA;border-color:rgba(59,130,246,.2)}
+  .mockup-card-action svg{width:10px;height:10px}
+  .mockup-card-star{color:#FBBF24;display:flex}
+  .mockup-card-star svg{width:12px;height:12px}
+
+  .section-label{font-size:12px;color:#3B82F6;text-transform:uppercase;letter-spacing:2.5px;font-weight:600;text-align:center;margin-bottom:14px}
+  .section-title{font-family:'Space Grotesk',sans-serif;font-size:38px;font-weight:700;text-align:center;letter-spacing:-.8px;margin-bottom:16px;line-height:1.15}
+  .section-desc{font-size:16px;color:#64748B;text-align:center;max-width:480px;margin:0 auto 60px;line-height:1.7}
+
+  .features{max-width:1100px;margin:0 auto;padding:120px 24px 0;position:relative;z-index:1}
+  .features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .feature-card{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:14px;padding:28px;transition:all 250ms ease;cursor:pointer;position:relative;overflow:hidden}
+  .feature-card::before{content:'';position:absolute;inset:0;border-radius:14px;background:radial-gradient(circle at 50% 0%,var(--card-glow,rgba(59,130,246,.06)) 0%,transparent 60%);opacity:0;transition:opacity 300ms ease}
+  .feature-card:hover::before{opacity:1}
+  .feature-card:hover{border-color:rgba(255,255,255,.1);transform:translateY(-2px)}
+  .feature-icon{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:18px;position:relative;z-index:1}
+  .feature-icon svg{width:20px;height:20px}
+  .feature-icon.blue{background:rgba(59,130,246,.1);color:#60A5FA}
+  .feature-icon.purple{background:rgba(139,92,246,.1);color:#A78BFA}
+  .feature-icon.green{background:rgba(34,197,94,.1);color:#4ADE80}
+  .feature-icon.amber{background:rgba(245,158,11,.1);color:#FBBF24}
+  .feature-icon.rose{background:rgba(244,63,94,.1);color:#FB7185}
+  .feature-icon.cyan{background:rgba(6,182,212,.1);color:#22D3EE}
+  .feature-card h3{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:600;margin-bottom:8px;color:#E2E8F0;position:relative;z-index:1}
+  .feature-card p{font-size:13px;color:#475569;line-height:1.7;position:relative;z-index:1}
+
+  .highlight{max-width:1100px;margin:0 auto;padding:100px 24px 0;position:relative;z-index:1}
+  .highlight-card{background:rgba(255,255,255,.015);border:1px solid rgba(255,255,255,.06);border-radius:20px;padding:56px;display:flex;align-items:center;gap:56px;position:relative;overflow:hidden}
+  .highlight-card::before{content:'';position:absolute;top:-50%;left:-20%;width:60%;height:200%;background:radial-gradient(ellipse,rgba(59,130,246,.06) 0%,transparent 60%);pointer-events:none}
+  .highlight-text{flex:1;position:relative;z-index:1}
+  .highlight-text h3{font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:700;margin-bottom:16px;letter-spacing:-.5px;line-height:1.2}
+  .highlight-text p{font-size:15px;color:#64748B;line-height:1.8;margin-bottom:24px}
+  .highlight-features{display:flex;flex-direction:column;gap:10px;margin-bottom:28px}
+  .highlight-feature-item{display:flex;align-items:center;gap:10px;font-size:14px;color:#94A3B8}
+  .highlight-feature-item svg{width:16px;height:16px;color:#22C55E;flex-shrink:0}
+  .highlight-visual{flex:1;position:relative;z-index:1}
+  .sync-diagram{background:rgba(0,0,0,.25);border-radius:16px;padding:32px 24px;border:1px solid rgba(255,255,255,.05)}
+  .sync-flow{display:flex;align-items:center;justify-content:center;gap:12px}
+  .sync-node{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .sync-node-icon{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);transition:all 300ms ease}
+  .sync-node-icon:hover{border-color:rgba(59,130,246,.3)}
+  .sync-node-icon svg{width:22px;height:22px}
+  .sync-node-label{font-size:12px;color:#64748B;font-weight:500}
+  .sync-arrow svg{width:20px;height:20px;color:#334155}
+
+  .how-it-works{max-width:900px;margin:0 auto;padding:100px 24px 0;position:relative;z-index:1}
+  .steps{display:flex;flex-direction:column;gap:0;position:relative}
+  .steps::before{content:'';position:absolute;left:23px;top:24px;bottom:24px;width:1px;background:linear-gradient(180deg,rgba(59,130,246,.3) 0%,rgba(139,92,246,.3) 50%,rgba(255,255,255,.05) 100%)}
+  .step{display:flex;gap:24px;padding:20px 0;position:relative}
+  .step-number{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:16px;flex-shrink:0;position:relative;z-index:1}
+  .step:nth-child(1) .step-number{background:rgba(59,130,246,.12);color:#60A5FA}
+  .step:nth-child(2) .step-number{background:rgba(139,92,246,.12);color:#A78BFA}
+  .step:nth-child(3) .step-number{background:rgba(34,197,94,.12);color:#4ADE80}
+  .step-content{padding-top:4px}
+  .step-content h3{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:600;margin-bottom:6px;color:#E2E8F0}
+  .step-content p{font-size:14px;color:#475569;line-height:1.7}
+
+  .download{text-align:center;padding:120px 24px 40px;max-width:640px;margin:0 auto;position:relative;z-index:1}
+  .download-cta-box{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:24px;padding:56px 40px;position:relative;overflow:hidden}
+  .download-cta-box::before{content:'';position:absolute;top:-100px;left:50%;transform:translateX(-50%);width:400px;height:300px;background:radial-gradient(ellipse,rgba(59,130,246,.08) 0%,transparent 60%);pointer-events:none}
+  .download h2{font-family:'Space Grotesk',sans-serif;font-size:32px;font-weight:700;margin-bottom:12px;letter-spacing:-.5px;position:relative}
+  .download p{color:#64748B;font-size:15px;margin-bottom:36px;line-height:1.7;position:relative}
+  .download-buttons{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;position:relative}
+  .download-btn{display:inline-flex;align-items:center;gap:14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px 24px;text-decoration:none;color:#F8FAFC;cursor:pointer;transition:all 250ms ease;min-width:190px}
+  .download-btn:hover{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.15);transform:translateY(-2px)}
+  .download-btn svg{width:26px;height:26px;opacity:.9}
+  .download-btn-text{text-align:left}
+  .download-btn-text small{font-size:11px;color:#475569;display:block;margin-bottom:1px}
+  .download-btn-text span{font-size:14px;font-weight:600}
+
+  .footer{border-top:1px solid rgba(255,255,255,.04);padding:28px 24px;position:relative;z-index:1}
+  .footer-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;color:#334155;font-size:13px}
+  .footer-left{display:flex;align-items:center;gap:6px}
+  .footer-left svg{width:16px;height:16px;opacity:.5}
+  .footer-links{display:flex;gap:20px}
+  .footer-links a{color:#475569;text-decoration:none;transition:color 200ms;cursor:pointer;font-size:13px}
+  .footer-links a:hover{color:#94A3B8}
+
+  @media(max-width:768px){
+    .hero{padding:120px 20px 40px}
+    .hero h1{font-size:40px;letter-spacing:-1px}
+    .hero p{font-size:16px}
+    .stats-bar{gap:24px;flex-wrap:wrap}
+    .stat-value{font-size:22px}
+    .stat-divider{display:none}
+    .features-grid{grid-template-columns:1fr}
+    .highlight-card{flex-direction:column;padding:32px 24px;gap:32px}
+    .highlight-text h3{font-size:24px}
+    .footer-inner{flex-direction:column;gap:14px}
+    .nav-links a:not(.nav-cta):not(.nav-lang){display:none}
+    .mockup-body{flex-direction:column}
+    .mockup-sidebar{width:100%}
+    .app-mockup{animation:none}
+    .download-cta-box{padding:36px 24px}
+    .sync-flow{flex-direction:column;gap:8px}
+    .sync-arrow svg{transform:rotate(90deg)}
+    .section-title{font-size:28px}
+    .nav{top:8px;left:8px;right:8px}
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div class="bg-glow-1"></div>
+<div class="bg-glow-2"></div>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="nav-logo" href="#">
+      <svg viewBox="0 0 1024 1024" fill="none"><defs><linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#3b82f6"/><stop offset="100%" style="stop-color:#6366f1"/></linearGradient></defs><rect width="1024" height="1024" rx="220" fill="url(#logoGrad)"/><path d="M204 153 L204 920 L820 920 L820 153 L204 153" fill="white"/><path d="M204 153 L204 920 L285 870 L285 102 Z" fill="white" fill-opacity=".7"/><path d="M820 153 L820 920 L739 870 L739 102 Z" fill="white" fill-opacity=".5"/><path d="M204 153 L285 102 L739 102 L820 153 L739 184 L285 184 Z" fill="white" fill-opacity=".9"/><rect x="266" y="225" width="492" height="184" rx="30" fill="#3b82f6" fill-opacity=".5"/><rect x="450" y="286" width="124" height="62" rx="30" fill="white" fill-opacity=".9"/><rect x="266" y="450" width="492" height="184" rx="30" fill="#3b82f6" fill-opacity=".6"/><rect x="450" y="512" width="124" height="62" rx="30" fill="white" fill-opacity=".9"/><rect x="266" y="675" width="492" height="184" rx="30" fill="#3b82f6" fill-opacity=".7"/><rect x="450" y="737" width="124" height="62" rx="30" fill="white" fill-opacity=".9"/></svg>
+      <span>CmdBox</span>
+    </a>
+    <div class="nav-links">
+      <a href="#features" data-lang-zh="功能" data-lang-en="Features"></a>
+      <a href="#sync" data-lang-zh="同步" data-lang-en="Sync"></a>
+      <a href="#download" data-lang-zh="下载" data-lang-en="Download"></a>
+      <a class="nav-github" href="https://github.com/jxhu0/CmdBox" target="_blank" aria-label="GitHub">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+      </a>
+      <button class="nav-lang" id="langToggle" onclick="toggleLang()">EN</button>
+      <a class="nav-cta" href="#download" data-lang-zh="下载" data-lang-en="Download"></a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-glow"></div>
+  <div class="hero-badge">
+    <div class="hero-badge-dot"></div>
+    <span data-lang-zh="开源免费 · 跨平台" data-lang-en="Open Source · Cross-Platform"></span>
+    <span class="hero-badge-version">v1.2.1</span>
+  </div>
+  <h1>
+    <span data-lang-zh="你的命令行" data-lang-en="Your CLI"></span><br>
+    <span class="gradient-text" data-lang-zh="井井有条" data-lang-en="Perfectly Organized"></span>
+  </h1>
+  <p data-lang-zh="专为开发者打造的命令行指令与大模型 Prompt 管理工具。分类存储、一键复制、Git 同步，让常用指令触手可及。" data-lang-en="A command-line snippet and LLM prompt manager built for developers. Organize, copy in one click, sync via Git — your go-to commands, always at hand."></p>
+  <div class="hero-buttons">
+    <a class="btn-primary" href="#download">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      <span data-lang-zh="免费下载" data-lang-en="Free Download"></span>
+    </a>
+    <a class="btn-secondary" href="https://github.com/jxhu0/CmdBox" target="_blank">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+      <span data-lang-zh="查看源码" data-lang-en="View Source"></span>
+    </a>
+  </div>
+</section>
+
+<!-- STATS -->
+<div class="stats-bar">
+  <div class="stat-item">
+    <div class="stat-value">0<span class="accent">$</span></div>
+    <div class="stat-label" data-lang-zh="永久免费" data-lang-en="Free Forever"></div>
+  </div>
+  <div class="stat-divider"></div>
+  <div class="stat-item">
+    <div class="stat-value">macOS <span class="accent">+</span> Win</div>
+    <div class="stat-label" data-lang-zh="跨平台支持" data-lang-en="Cross-Platform"></div>
+  </div>
+  <div class="stat-divider"></div>
+  <div class="stat-item">
+    <div class="stat-value"><span class="accent">Git</span> <span data-lang-zh="驱动" data-lang-en="Powered"></span></div>
+    <div class="stat-label" data-lang-zh="无需服务器" data-lang-en="No Server Needed"></div>
+  </div>
+  <div class="stat-divider"></div>
+  <div class="stat-item">
+    <div class="stat-value">MIT</div>
+    <div class="stat-label" data-lang-zh="开源协议" data-lang-en="Open Source"></div>
+  </div>
+</div>
+
+<!-- APP MOCKUP -->
+<section class="mockup-section">
+  <div class="app-mockup">
+    <div class="mockup-titlebar">
+      <div class="mockup-dots"><div class="mockup-dot"></div><div class="mockup-dot"></div><div class="mockup-dot"></div></div>
+      <div class="mockup-titlebar-text">CmdBox</div>
+      <div style="width:49px"></div>
+    </div>
+    <div class="mockup-body">
+      <div class="mockup-sidebar">
+        <div class="mockup-sidebar-label" data-lang-zh="板块" data-lang-en="Boards"></div>
+        <div class="mockup-sidebar-item active">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+          <span data-lang-zh="常用命令" data-lang-en="Commands"></span>
+        </div>
+        <div class="mockup-sidebar-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          Git
+        </div>
+        <div class="mockup-sidebar-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+          Docker
+        </div>
+        <div class="mockup-sidebar-divider"></div>
+        <div class="mockup-sidebar-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          <span>LLM Prompt</span>
+        </div>
+        <div class="mockup-sidebar-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+          <span data-lang-zh="部署脚本" data-lang-en="Scripts"></span>
+        </div>
+      </div>
+      <div class="mockup-content">
+        <div class="mockup-toolbar">
+          <div class="mockup-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <span data-lang-zh="搜索指令或标签..." data-lang-en="Search commands or tags..."></span>
+            <kbd>/</kbd>
+          </div>
+          <div class="mockup-toolbar-btn" title="Add">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </div>
+        </div>
+        <div class="mockup-cards">
+          <div class="mockup-card">
+            <div class="mockup-card-left">
+              <div class="mockup-card-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg></div>
+              <div class="mockup-card-info"><div class="mockup-card-title">docker-compose up -d</div><div class="mockup-card-desc">Docker</div></div>
+            </div>
+            <div class="mockup-card-right"><div class="mockup-card-tag">container</div><div class="mockup-card-action"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></div></div>
+          </div>
+          <div class="mockup-card">
+            <div class="mockup-card-left">
+              <div class="mockup-card-icon purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div>
+              <div class="mockup-card-info"><div class="mockup-card-title" data-lang-zh="代码审查 Prompt" data-lang-en="Code Review Prompt"></div><div class="mockup-card-desc">LLM Prompt</div></div>
+            </div>
+            <div class="mockup-card-right"><div class="mockup-card-star"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div><div class="mockup-card-action"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></div></div>
+          </div>
+          <div class="mockup-card">
+            <div class="mockup-card-left">
+              <div class="mockup-card-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></div>
+              <div class="mockup-card-info"><div class="mockup-card-title">git rebase -i HEAD~5</div><div class="mockup-card-desc">Git</div></div>
+            </div>
+            <div class="mockup-card-right"><div class="mockup-card-tag">rebase</div><div class="mockup-card-action"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></div></div>
+          </div>
+          <div class="mockup-card">
+            <div class="mockup-card-left">
+              <div class="mockup-card-icon amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div>
+              <div class="mockup-card-info"><div class="mockup-card-title">ffmpeg -i input.mp4 ...</div><div class="mockup-card-desc" data-lang-zh="常用命令" data-lang-en="Commands"></div></div>
+            </div>
+            <div class="mockup-card-right"><div class="mockup-card-tag">video</div><div class="mockup-card-action"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features" id="features">
+  <div class="animate-on-scroll">
+    <div class="section-label" data-lang-zh="功能亮点" data-lang-en="Features"></div>
+    <div class="section-title" data-lang-zh="为效率而生的每一个细节" data-lang-en="Every Detail Built for Efficiency"></div>
+    <div class="section-desc" data-lang-zh="从分类管理到多端同步，每个功能都围绕「快速找到、立即使用」设计。" data-lang-en="From organized boards to multi-device sync, every feature is designed around one goal: find it fast, use it instantly."></div>
+  </div>
+  <div class="features-grid">
+    <div class="feature-card animate-on-scroll" style="--card-glow:rgba(59,130,246,.06)">
+      <div class="feature-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></div>
+      <h3 data-lang-zh="板块分类" data-lang-en="Custom Boards"></h3>
+      <p data-lang-zh="自定义板块，将命令按项目、场景、工具分类管理，结构清晰。" data-lang-en="Create custom boards to organize commands by project, scenario, or tool. Clean and structured."></p>
+    </div>
+    <div class="feature-card animate-on-scroll" style="--card-glow:rgba(139,92,246,.06);transition-delay:50ms">
+      <div class="feature-icon purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+      <h3 data-lang-zh="实时搜索" data-lang-en="Instant Search"></h3>
+      <p data-lang-zh="输入即搜，毫秒级过滤，配合标签系统快速定位任何一条指令。" data-lang-en="Type to search with millisecond filtering. Combined with tags, find any command instantly."></p>
+    </div>
+    <div class="feature-card animate-on-scroll" style="--card-glow:rgba(34,197,94,.06);transition-delay:100ms">
+      <div class="feature-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></div>
+      <h3 data-lang-zh="一键复制" data-lang-en="One-Click Copy"></h3>
+      <p data-lang-zh="点击即刻复制到剪贴板，粘贴即用，零额外操作。" data-lang-en="Copy to clipboard with a single click. Paste and run — zero friction."></p>
+    </div>
+    <div class="feature-card animate-on-scroll" style="--card-glow:rgba(245,158,11,.06);transition-delay:150ms">
+      <div class="feature-icon amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
+      <h3 data-lang-zh="收藏置顶" data-lang-en="Favorites & Pinning"></h3>
+      <p data-lang-zh="高频指令收藏置顶，常用命令始终在手边，不被淹没。" data-lang-en="Pin your most-used commands to the top. Always within reach, never buried."></p>
+    </div>
+    <div class="feature-card animate-on-scroll" style="--card-glow:rgba(244,63,94,.06);transition-delay:200ms">
+      <div class="feature-icon rose"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>
+      <h3 data-lang-zh="标签系统" data-lang-en="Tag System"></h3>
+      <p data-lang-zh="灵活的标签机制，一条指令可归属多个分类维度。" data-lang-en="Flexible tagging — one command can belong to multiple categories."></p>
+    </div>
+    <div class="feature-card animate-on-scroll" style="--card-glow:rgba(6,182,212,.06);transition-delay:250ms">
+      <div class="feature-icon cyan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+      <h3 data-lang-zh="批量导出" data-lang-en="Batch Export"></h3>
+      <p data-lang-zh="支持 JSON / CSV 格式导出，方便备份和迁移。" data-lang-en="Export to JSON or CSV for easy backup and migration."></p>
+    </div>
+  </div>
+</section>
+
+<!-- GIT SYNC -->
+<section class="highlight" id="sync">
+  <div class="highlight-card animate-on-scroll">
+    <div class="highlight-text">
+      <div class="section-label" data-lang-zh="数据同步" data-lang-en="Data Sync"></div>
+      <h3 data-lang-zh="Git 驱动，多端无缝同步" data-lang-en="Git-Powered Seamless Sync"></h3>
+      <p data-lang-zh="基于 Git 私有仓库实现数据同步，无需注册账号，无需第三方服务。你的数据始终在自己的掌控之中。" data-lang-en="Sync data via your own Git private repo. No account signup, no third-party service. Your data stays in your control."></p>
+      <div class="highlight-features">
+        <div class="highlight-feature-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span data-lang-zh="数据存储在你自己的 Git 私有仓库" data-lang-en="Data stored in your own Git private repo"></span>
+        </div>
+        <div class="highlight-feature-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span data-lang-zh="一键推送 / 拉取，自动合并" data-lang-en="One-click push/pull with auto merge"></span>
+        </div>
+        <div class="highlight-feature-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span data-lang-zh="无需服务器，零成本运行" data-lang-en="No server needed, zero cost"></span>
+        </div>
+      </div>
+    </div>
+    <div class="highlight-visual">
+      <div class="sync-diagram">
+        <div class="sync-flow">
+          <div class="sync-node">
+            <div class="sync-node-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#60A5FA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
+            <span class="sync-node-label" data-lang-zh="办公电脑" data-lang-en="Office PC"></span>
+          </div>
+          <div class="sync-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg></div>
+          <div class="sync-node">
+            <div class="sync-node-icon" style="border-color:rgba(139,92,246,.25);background:rgba(139,92,246,.06)"><svg viewBox="0 0 24 24" fill="none" stroke="#A78BFA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg></div>
+            <span class="sync-node-label" style="color:#A78BFA">Git</span>
+          </div>
+          <div class="sync-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg></div>
+          <div class="sync-node">
+            <div class="sync-node-icon" style="border-color:rgba(34,197,94,.25);background:rgba(34,197,94,.06)"><svg viewBox="0 0 24 24" fill="none" stroke="#4ADE80" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></div>
+            <span class="sync-node-label" style="color:#4ADE80" data-lang-zh="家里电脑" data-lang-en="Home PC"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how-it-works">
+  <div class="animate-on-scroll">
+    <div class="section-label" data-lang-zh="快速上手" data-lang-en="Get Started"></div>
+    <div class="section-title" data-lang-zh="三步开始使用" data-lang-en="Up and Running in 3 Steps"></div>
+    <div class="section-desc" data-lang-zh="从下载到使用，只需几分钟。" data-lang-en="From download to productivity in just a few minutes."></div>
+  </div>
+  <div class="steps">
+    <div class="step animate-on-scroll">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <h3 data-lang-zh="下载安装" data-lang-en="Download & Install"></h3>
+        <p data-lang-zh="前往 GitHub Releases 下载对应平台的安装包，macOS 解压运行，Windows 双击安装。" data-lang-en="Download the installer from GitHub Releases. Unzip and run on macOS, or double-click on Windows."></p>
+      </div>
+    </div>
+    <div class="step animate-on-scroll" style="transition-delay:80ms">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <h3 data-lang-zh="创建数据仓库" data-lang-en="Set Up Data Repo"></h3>
+        <p data-lang-zh="在 GitHub 创建一个私有仓库并 clone 到本地，打开 CmdBox 选择该文件夹作为数据目录。" data-lang-en="Create a private repo on GitHub, clone it locally, and point CmdBox to that folder as your data directory."></p>
+      </div>
+    </div>
+    <div class="step animate-on-scroll" style="transition-delay:160ms">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <h3 data-lang-zh="开始使用" data-lang-en="Start Using"></h3>
+        <p data-lang-zh="添加你的常用命令和 Prompt，按板块分类管理。需要同步时，点击同步按钮即可。" data-lang-en="Add your commands and prompts, organize them into boards. Hit sync whenever you need to update across devices."></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DOWNLOAD -->
+<section class="download" id="download">
+  <div class="download-cta-box animate-on-scroll">
+    <h2 data-lang-zh="现在就开始使用" data-lang-en="Get Started Now"></h2>
+    <p data-lang-zh="开源免费，支持 macOS 和 Windows。几分钟内即可上手。" data-lang-en="Free and open source. Available for macOS and Windows. Up and running in minutes."></p>
+    <div class="download-buttons">
+      <a class="download-btn" href="https://github.com/jxhu0/CmdBox/releases">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+        <div class="download-btn-text"><small data-lang-zh="下载 macOS 版本" data-lang-en="Download for macOS"></small><span>CmdBox.zip</span></div>
+      </a>
+      <a class="download-btn" href="https://github.com/jxhu0/CmdBox/releases">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
+        <div class="download-btn-text"><small data-lang-zh="下载 Windows 版本" data-lang-en="Download for Windows"></small><span>CmdBox.exe</span></div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-left">
+      <svg viewBox="0 0 1024 1024" fill="none" style="width:16px;height:16px"><rect width="1024" height="1024" rx="220" fill="rgba(59,130,246,.3)"/><path d="M204 153 L204 920 L820 920 L820 153 L204 153" fill="white" fill-opacity=".5"/><rect x="266" y="225" width="492" height="184" rx="30" fill="white" fill-opacity=".15"/><rect x="266" y="450" width="492" height="184" rx="30" fill="white" fill-opacity=".15"/><rect x="266" y="675" width="492" height="184" rx="30" fill="white" fill-opacity=".15"/></svg>
+      <span>&copy; 2026 CmdBox</span>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/jxhu0/CmdBox">GitHub</a>
+      <a href="https://github.com/jxhu0/CmdBox/releases">Releases</a>
+      <a href="https://github.com/jxhu0/CmdBox/issues" data-lang-zh="反馈问题" data-lang-en="Feedback"></a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Language toggle
+  let currentLang = localStorage.getItem('cmdbox-lang') || 'zh';
+
+  function applyLang(lang) {
+    currentLang = lang;
+    document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+    document.querySelectorAll('[data-lang-zh]').forEach(el => {
+      el.textContent = el.getAttribute('data-lang-' + lang);
+    });
+    document.getElementById('langToggle').textContent = lang === 'zh' ? 'EN' : '中';
+    document.title = lang === 'zh'
+      ? 'CmdBox — 命令行指令管理工具'
+      : 'CmdBox — Command Line Snippet Manager';
+  }
+
+  function toggleLang() {
+    applyLang(currentLang === 'zh' ? 'en' : 'zh');
+    localStorage.setItem('cmdbox-lang', currentLang);
+  }
+
+  applyLang(currentLang);
+
+  // Scroll animation observer
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) entry.target.classList.add('visible');
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+  document.querySelectorAll('.animate-on-scroll').forEach(el => observer.observe(el));
+
+  // Smooth scroll for anchor links
+  document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function(e) {
+      e.preventDefault();
+      const target = document.querySelector(this.getAttribute('href'));
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+</script>
+</body>
+</html>

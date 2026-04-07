@@ -42,3 +42,6 @@ env/
 *.log
 .env
 .env.local
+
+# Design drafts
+.superpowers/
