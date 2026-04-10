@@ -156,13 +156,13 @@ class Sidebar(ft.Container):
             ft.Text("板块", size=10, color=ft.Colors.GREY_500, weight=ft.FontWeight.BOLD),
         ]
 
-        # 收藏板块在顶部
-        if fav_item:
-            content_items.append(fav_item)
-
-        # 任务板块
+        # 任务板块在顶部
         if tasks_item:
             content_items.append(tasks_item)
+
+        # 收藏板块
+        if fav_item:
+            content_items.append(fav_item)
 
         # 可拖拽的普通板块列表
         content_items.append(ft.Container(
