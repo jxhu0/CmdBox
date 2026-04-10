@@ -650,6 +650,7 @@ class CmdBoxApp:
                 task = Task.create(title=title, description=description, priority=priority)
                 self.data_service.add_task(task)
                 self._refresh_tasks()
+                self._refresh_sidebar()
             self.page.pop_dialog()
             self.page.update()
 
@@ -664,6 +665,7 @@ class CmdBoxApp:
                 task.update(title=title, description=description, priority=priority)
                 self.data_service.update_task(task)
                 self._refresh_tasks()
+                self._refresh_sidebar()
             self.page.pop_dialog()
             self.page.update()
 
@@ -676,6 +678,7 @@ class CmdBoxApp:
         def on_confirm():
             self.data_service.delete_task(task.id)
             self._refresh_tasks()
+            self._refresh_sidebar()
             self.page.pop_dialog()
             self.page.update()
 
@@ -692,12 +695,14 @@ class CmdBoxApp:
         task.update(completed=not task.completed)
         self.data_service.update_task(task)
         self._refresh_tasks()
+        self._refresh_sidebar()
 
     def _on_clear_completed_tasks(self):
         """清除所有已完成任务"""
         def on_confirm():
             self.data_service.delete_completed_tasks()
             self._refresh_tasks()
+            self._refresh_sidebar()
             self.page.pop_dialog()
             self.page.update()
 
