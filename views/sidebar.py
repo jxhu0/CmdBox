@@ -16,7 +16,8 @@ class Sidebar(ft.Container):
         on_delete_board: Callable[[str], None],
         on_reorder_boards: Callable[[List[str]], None],
         selected_board_id: Optional[str] = None,
-        favorites_board_id: Optional[str] = None
+        favorites_board_id: Optional[str] = None,
+        tasks_board_id: Optional[str] = None
     ):
         super().__init__()
         self.boards = boards
@@ -27,6 +28,7 @@ class Sidebar(ft.Container):
         self.on_reorder_boards = on_reorder_boards
         self.selected_board_id = selected_board_id
         self.favorites_board_id = favorites_board_id
+        self.tasks_board_id = tasks_board_id
 
         self.width = 180
         self.bgcolor = ft.Colors.WHITE
@@ -102,6 +104,28 @@ class Sidebar(ft.Container):
                 on_click=lambda e: self.on_board_select(self.favorites_board_id)
             )
 
+        # 任务板块（固定，不可拖动）
+        tasks_item = None
+        if self.tasks_board_id:
+            is_selected = self.selected_board_id == self.tasks_board_id
+            tasks_item = ft.Container(
+                content=ft.Row([
+                    ft.Container(
+                        content=ft.Icon(ft.Icons.CHECKLIST, size=16, color=ft.Colors.GREEN),
+                        margin=ft.margin.only(left=-7)
+                    ),
+                    ft.Container(width=2),
+                    ft.Text("任务", size=13, weight=ft.FontWeight.W_600 if is_selected else ft.FontWeight.NORMAL,
+                            color=ft.Colors.GREEN_700 if is_selected else ft.Colors.GREY_700),
+                    ft.Container(content=None, expand=True)
+                ], spacing=4, tight=True),
+                padding=14,
+                border_radius=8,
+                bgcolor=ft.Colors.GREEN_50 if is_selected else ft.Colors.TRANSPARENT,
+                border=ft.border.only(left=ft.border.BorderSide(3, ft.Colors.GREEN_500)) if is_selected else None,
+                on_click=lambda e: self.on_board_select(self.tasks_board_id)
+            )
+
         # 普通板块列表（可拖拽排序）
         board_items = [self._build_board_item(board) for board in self.boards]
 
@@ -136,6 +160,10 @@ class Sidebar(ft.Container):
         if fav_item:
             content_items.append(fav_item)
 
+        # 任务板块
+        if tasks_item:
+            content_items.append(tasks_item)
+
         # 可拖拽的普通板块列表
         content_items.append(ft.Container(
             content=reorderable_list,
@@ -148,10 +176,12 @@ class Sidebar(ft.Container):
 
         return ft.Column(content_items, tight=False, expand=True)
 
-    def update_boards(self, boards: List[Board], selected_id: Optional[str] = None, favorites_id: Optional[str] = None):
+    def update_boards(self, boards: List[Board], selected_id: Optional[str] = None, favorites_id: Optional[str] = None, tasks_id: Optional[str] = None):
         self.boards = boards
         self.selected_board_id = selected_id
         if favorites_id:
             self.favorites_board_id = favorites_id
+        if tasks_id:
+            self.tasks_board_id = tasks_id
         self.content = self._build_content()
         self.update()

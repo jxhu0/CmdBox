@@ -7,6 +7,7 @@ from pathlib import Path
 from datetime import datetime
 from models.board import Board
 from models.command import Command
+from models.task import Task
 
 
 class DataService:
@@ -18,6 +19,7 @@ class DataService:
         self.backup_dir = self.data_path / "backups"
         self.boards: List[Board] = []
         self.commands: List[Command] = []
+        self.tasks: List[Task] = []
 
     def load(self):
         """从文件加载数据"""
@@ -30,6 +32,7 @@ class DataService:
 
         self.boards = [Board.from_dict(b) for b in data.get("boards", [])]
         self.commands = [Command.from_dict(c) for c in data.get("commands", [])]
+        self.tasks = [Task.from_dict(t) for t in data.get("tasks", [])]
 
     def save(self):
         """保存数据到文件"""
@@ -37,7 +40,8 @@ class DataService:
 
         data = {
             "boards": [b.to_dict() for b in self.boards],
-            "commands": [c.to_dict() for c in self.commands]
+            "commands": [c.to_dict() for c in self.commands],
+            "tasks": [t.to_dict() for t in self.tasks]
         }
 
         with open(self.data_file, "w", encoding="utf-8") as f:
@@ -145,6 +149,30 @@ class DataService:
 
     def delete_command(self, command_id: str):
         self.commands = [c for c in self.commands if c.id != command_id]
+        self.save()
+
+    # Task CRUD
+    def add_task(self, task: Task):
+        self.tasks.append(task)
+        self.save()
+
+    def get_task(self, task_id: str) -> Optional[Task]:
+        for task in self.tasks:
+            if task.id == task_id:
+                return task
+        return None
+
+    def get_sorted_tasks(self) -> List[Task]:
+        """按优先级排序（高→中→低），同优先级按创建时间倒序"""
+        priority_order = {"high": 0, "medium": 1, "low": 2}
+        sorted_by_time = sorted(self.tasks, key=lambda t: t.created_at or "", reverse=True)
+        return sorted(sorted_by_time, key=lambda t: priority_order.get(t.priority, 1))
+
+    def update_task(self, task: Task):
+        self.save()
+
+    def delete_task(self, task_id: str):
+        self.tasks = [t for t in self.tasks if t.id != task_id]
         self.save()
 
     def move_command_up(self, command_id: str, board_id: str = None):

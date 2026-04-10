@@ -5,6 +5,7 @@ import platform
 from typing import List, Optional, Callable
 from models.board import Board
 from models.command import Command
+from models.task import Task
 
 
 def _browse_folder(initial_dir: str) -> Optional[str]:
@@ -614,6 +615,73 @@ class SettingsDialog(ft.AlertDialog):
             self.on_save_callback(self.remote_field.value)
         if self.on_path_save_callback and new_path:
             self.on_path_save_callback(new_path)
+        if self.page:
+            self.page.pop_dialog()
+            self.page.update()
+
+
+class TaskDialog(ft.AlertDialog):
+    """任务新建/编辑对话框"""
+
+    def __init__(
+        self,
+        title: str,
+        task: Optional[Task] = None,
+        on_save: Callable[[str, str, str], None] = None
+    ):
+        super().__init__()
+        self.modal = True
+        self.title = ft.Text(title)
+        self.on_save_callback = on_save
+
+        self.title_field = ft.TextField(
+            label="任务标题",
+            value=task.title if task else "",
+            autofocus=True,
+            text_size=13
+        )
+        self.desc_field = ft.TextField(
+            label="描述（可选）",
+            value=task.description if task else "",
+            multiline=True,
+            max_lines=3,
+            text_size=13
+        )
+        self.priority_dropdown = ft.Dropdown(
+            label="优先级",
+            options=[
+                ft.dropdown.DropdownOption("high", "高优先级"),
+                ft.dropdown.DropdownOption("medium", "中优先级"),
+                ft.dropdown.DropdownOption("low", "低优先级"),
+            ],
+            value=task.priority if task else "medium",
+            text_size=13
+        )
+
+        self.content = ft.Container(
+            content=ft.Column([
+                self.title_field,
+                self.desc_field,
+                self.priority_dropdown
+            ], tight=True, spacing=12),
+            width=350
+        )
+        self.actions = [
+            ft.TextButton("取消", on_click=self._on_cancel),
+            ft.TextButton("保存", on_click=self._on_save)
+        ]
+
+    def _on_cancel(self, e):
+        if self.page:
+            self.page.pop_dialog()
+            self.page.update()
+
+    def _on_save(self, e):
+        title = self.title_field.value or ""
+        description = self.desc_field.value or ""
+        priority = self.priority_dropdown.value or "medium"
+        if self.on_save_callback:
+            self.on_save_callback(title, description, priority)
         if self.page:
             self.page.pop_dialog()
             self.page.update()

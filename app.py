@@ -12,11 +12,13 @@ from services.clipboard_service import ClipboardService
 from services.update_service import UpdateService
 from models.board import Board
 from models.command import Command
+from models.task import Task
 from views.sidebar import Sidebar
 from views.search_bar import SearchBar
 from views.command_list import CommandList
+from views.task_list import TaskList
 from views.board_desc_card import BoardDescCard
-from views.dialogs import BoardDialog, CommandDialog, ConfirmDialog, EditAndCopyDialog, SettingsDialog
+from views.dialogs import BoardDialog, CommandDialog, ConfirmDialog, EditAndCopyDialog, SettingsDialog, TaskDialog
 from views.export_dialog import ExportDialog
 from views.setup_wizard import create_setup_wizard
 from views.update_dialog import UpdateDialog
@@ -37,6 +39,8 @@ class CmdBoxApp:
 
         # 收藏板块ID（虚拟板块，不存储在数据中）
         self.FAVORITES_BOARD_ID = "__favorites__"
+        # 任务板块ID（虚拟板块，不存储在数据中）
+        self.TASKS_BOARD_ID = "__tasks__"
 
         # 状态
         self.selected_board_id: Optional[str] = self.FAVORITES_BOARD_ID
@@ -236,7 +240,8 @@ class CmdBoxApp:
             on_delete_board=self._on_delete_board,
             on_reorder_boards=self._on_reorder_boards,
             selected_board_id=self.selected_board_id,
-            favorites_board_id=self.FAVORITES_BOARD_ID
+            favorites_board_id=self.FAVORITES_BOARD_ID,
+            tasks_board_id=self.TASKS_BOARD_ID
         )
 
         # 指令列表
@@ -251,16 +256,24 @@ class CmdBoxApp:
             on_move_down=self._on_move_down
         )
 
+        # 任务列表
+        self.task_list = TaskList(
+            on_toggle_complete=self._on_toggle_task_complete,
+            on_edit=self._on_edit_task,
+            on_delete=self._on_delete_task,
+            on_add_task=self._on_add_task
+        )
+
         # 板块描述卡片
         self.board_desc_card = BoardDescCard(
             board=None,
             on_edit=self._on_edit_board_desc
         )
 
-        # 新建指令按钮
+        # 新建按钮
         self.add_btn = ft.FloatingActionButton(
             icon=ft.Icons.ADD,
-            on_click=lambda e: self._on_add_command()
+            on_click=self._on_fab_click
         )
 
         # 主内容区
@@ -269,9 +282,22 @@ class CmdBoxApp:
             padding=ft.padding.only(left=5, right=5, top=4, bottom=0),
             visible=False
         )
+
+        # 内容区：指令列表 / 任务列表切换
+        self.command_list_container = ft.Container(
+            content=self.command_list, expand=True,
+            padding=ft.padding.only(left=5, right=5, top=4, bottom=5),
+            visible=True
+        )
+        self.task_list_container = ft.Container(
+            content=self.task_list, expand=True,
+            padding=ft.padding.only(left=5, right=5, top=4, bottom=5),
+            visible=False
+        )
         main_content = ft.Column([
             self.board_desc_container,
-            ft.Container(content=self.command_list, expand=True, padding=ft.padding.only(left=5, right=5, top=4, bottom=5))
+            self.command_list_container,
+            self.task_list_container,
         ], expand=True, spacing=0)
 
         # 布局（侧边栏宽度减小）
@@ -313,7 +339,8 @@ class CmdBoxApp:
         self.sidebar.update_boards(
             self.data_service.boards,
             self.selected_board_id,
-            self.FAVORITES_BOARD_ID
+            self.FAVORITES_BOARD_ID,
+            tasks_id=self.TASKS_BOARD_ID
         )
         self.search_bar.update_boards(self.data_service.boards)
         self.search_bar.update_tags(self._get_all_tags())
@@ -328,9 +355,16 @@ class CmdBoxApp:
             # 收藏板块
             self.show_favorites_only = True
             self.search_board_ids = None
+            self._show_task_list(False)
+        elif board_id == self.TASKS_BOARD_ID:
+            # 任务板块
+            self.show_favorites_only = False
+            self.search_board_ids = None
+            self._show_task_list(True)
         else:
             self.show_favorites_only = False
             self.search_board_ids = [board_id]
+            self._show_task_list(False)
         self._refresh_commands()
         self._refresh_sidebar()
         self._refresh_board_desc()
@@ -399,8 +433,8 @@ class CmdBoxApp:
 
     def _refresh_board_desc(self):
         """刷新板块描述卡片"""
-        # 收藏板块不显示描述卡片
-        if self.selected_board_id == self.FAVORITES_BOARD_ID:
+        # 收藏板块和任务板块不显示描述卡片
+        if self.selected_board_id in (self.FAVORITES_BOARD_ID, self.TASKS_BOARD_ID):
             self.board_desc_card.update_board(None)
             self.board_desc_container.visible = False
         elif self.selected_board_id:
@@ -577,6 +611,77 @@ class CmdBoxApp:
             self._refresh_commands()
         finally:
             self._is_moving = False
+
+    # ==================== 任务相关 ====================
+
+    def _show_task_list(self, show_tasks: bool):
+        """切换右侧内容区：指令列表 / 任务列表"""
+        self.command_list_container.visible = not show_tasks
+        self.task_list_container.visible = show_tasks
+        if show_tasks:
+            self._refresh_tasks()
+
+    def _refresh_tasks(self):
+        """刷新任务列表"""
+        tasks = self.data_service.get_sorted_tasks()
+        self.task_list.update_tasks(tasks)
+
+    def _on_fab_click(self, e):
+        """FAB 按钮点击分发"""
+        if self.selected_board_id == self.TASKS_BOARD_ID:
+            self._on_add_task()
+        else:
+            self._on_add_command()
+
+    def _on_add_task(self):
+        """添加任务"""
+        def on_save(title: str, description: str, priority: str):
+            if title:
+                task = Task.create(title=title, description=description, priority=priority)
+                self.data_service.add_task(task)
+                self._refresh_tasks()
+            self.page.pop_dialog()
+            self.page.update()
+
+        dialog = TaskDialog("新建任务", on_save=on_save)
+        self.page.show_dialog(dialog)
+        self.page.update()
+
+    def _on_edit_task(self, task: Task):
+        """编辑任务"""
+        def on_save(title: str, description: str, priority: str):
+            if title:
+                task.update(title=title, description=description, priority=priority)
+                self.data_service.update_task(task)
+                self._refresh_tasks()
+            self.page.pop_dialog()
+            self.page.update()
+
+        dialog = TaskDialog("编辑任务", task=task, on_save=on_save)
+        self.page.show_dialog(dialog)
+        self.page.update()
+
+    def _on_delete_task(self, task: Task):
+        """删除任务"""
+        def on_confirm():
+            self.data_service.delete_task(task.id)
+            self._refresh_tasks()
+            self.page.pop_dialog()
+            self.page.update()
+
+        dialog = ConfirmDialog(
+            "确认删除",
+            f"确定要删除任务「{task.title}」吗？",
+            on_confirm=on_confirm
+        )
+        self.page.show_dialog(dialog)
+        self.page.update()
+
+    def _on_toggle_task_complete(self, task: Task):
+        """切换任务完成状态"""
+        task.update(completed=not task.completed)
+        self.data_service.update_task(task)
+        self._refresh_tasks()
 
     def _on_sync(self, e):
         """同步"""
