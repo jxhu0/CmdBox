@@ -261,7 +261,8 @@ class CmdBoxApp:
             on_toggle_complete=self._on_toggle_task_complete,
             on_edit=self._on_edit_task,
             on_delete=self._on_delete_task,
-            on_add_task=self._on_add_task
+            on_add_task=self._on_add_task,
+            on_clear_completed=self._on_clear_completed_tasks
         )
 
         # 板块描述卡片
@@ -336,11 +337,13 @@ class CmdBoxApp:
 
     def _refresh_sidebar(self):
         """刷新侧边栏"""
+        pending_count = len([t for t in self.data_service.tasks if not t.completed])
         self.sidebar.update_boards(
             self.data_service.boards,
             self.selected_board_id,
             self.FAVORITES_BOARD_ID,
-            tasks_id=self.TASKS_BOARD_ID
+            tasks_id=self.TASKS_BOARD_ID,
+            pending_task_count=pending_count
         )
         self.search_bar.update_boards(self.data_service.boards)
         self.search_bar.update_tags(self._get_all_tags())
@@ -374,7 +377,10 @@ class CmdBoxApp:
         self.search_keyword = keyword
         self.search_board_ids = board_ids
         self.search_tag = tag
-        self._refresh_commands()
+        if self.selected_board_id == self.TASKS_BOARD_ID:
+            self._refresh_tasks()
+        else:
+            self._refresh_commands()
 
     def _get_all_tags(self) -> List[str]:
         """获取所有已使用的标签"""
@@ -624,6 +630,9 @@ class CmdBoxApp:
     def _refresh_tasks(self):
         """刷新任务列表"""
         tasks = self.data_service.get_sorted_tasks()
+        if self.search_keyword:
+            keyword = self.search_keyword.lower()
+            tasks = [t for t in tasks if keyword in t.title.lower() or keyword in t.description.lower()]
         self.task_list.update_tasks(tasks)
 
     def _on_fab_click(self, e):
@@ -682,6 +691,23 @@ class CmdBoxApp:
         task.update(completed=not task.completed)
         self.data_service.update_task(task)
         self._refresh_tasks()
+
+    def _on_clear_completed_tasks(self):
+        """清除所有已完成任务"""
+        def on_confirm():
+            self.data_service.delete_completed_tasks()
+            self._refresh_tasks()
+            self.page.pop_dialog()
+            self.page.update()
+
+        completed_count = len([t for t in self.data_service.tasks if t.completed])
+        dialog = ConfirmDialog(
+            "确认清除",
+            f"确定要清除 {completed_count} 个已完成的任务吗？",
+            on_confirm=on_confirm
+        )
+        self.page.show_dialog(dialog)
+        self.page.update()
 
     def _on_sync(self, e):
         """同步"""

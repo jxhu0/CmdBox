@@ -17,7 +17,8 @@ class Sidebar(ft.Container):
         on_reorder_boards: Callable[[List[str]], None],
         selected_board_id: Optional[str] = None,
         favorites_board_id: Optional[str] = None,
-        tasks_board_id: Optional[str] = None
+        tasks_board_id: Optional[str] = None,
+        pending_task_count: int = 0
     ):
         super().__init__()
         self.boards = boards
@@ -29,6 +30,7 @@ class Sidebar(ft.Container):
         self.selected_board_id = selected_board_id
         self.favorites_board_id = favorites_board_id
         self.tasks_board_id = tasks_board_id
+        self.pending_task_count = pending_task_count
 
         self.width = 180
         self.bgcolor = ft.Colors.WHITE
@@ -108,17 +110,33 @@ class Sidebar(ft.Container):
         tasks_item = None
         if self.tasks_board_id:
             is_selected = self.selected_board_id == self.tasks_board_id
-            tasks_item = ft.Container(
-                content=ft.Row([
-                    ft.Container(
-                        content=ft.Icon(ft.Icons.CHECKLIST, size=16, color=ft.Colors.GREEN),
-                        margin=ft.margin.only(left=-7)
+            # 待办数量徽章
+            badge = None
+            if self.pending_task_count > 0:
+                badge = ft.Container(
+                    content=ft.Text(
+                        str(self.pending_task_count),
+                        size=10, color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD,
+                        text_align=ft.TextAlign.CENTER
                     ),
-                    ft.Container(width=2),
-                    ft.Text("任务", size=13, weight=ft.FontWeight.W_600 if is_selected else ft.FontWeight.NORMAL,
-                            color=ft.Colors.GREEN_700 if is_selected else ft.Colors.GREY_700),
-                    ft.Container(content=None, expand=True)
-                ], spacing=4, tight=True),
+                    bgcolor=ft.Colors.RED_500,
+                    border_radius=10,
+                    padding=ft.padding.symmetric(horizontal=5, vertical=1),
+                )
+            tasks_row_controls = [
+                ft.Container(
+                    content=ft.Icon(ft.Icons.CHECKLIST, size=16, color=ft.Colors.GREEN),
+                    margin=ft.margin.only(left=-7)
+                ),
+                ft.Container(width=2),
+                ft.Text("任务", size=13, weight=ft.FontWeight.W_600 if is_selected else ft.FontWeight.NORMAL,
+                        color=ft.Colors.GREEN_700 if is_selected else ft.Colors.GREY_700),
+                ft.Container(content=None, expand=True),
+            ]
+            if badge:
+                tasks_row_controls.append(badge)
+            tasks_item = ft.Container(
+                content=ft.Row(tasks_row_controls, spacing=4, tight=True),
                 padding=14,
                 border_radius=8,
                 bgcolor=ft.Colors.GREEN_50 if is_selected else ft.Colors.TRANSPARENT,
@@ -176,12 +194,13 @@ class Sidebar(ft.Container):
 
         return ft.Column(content_items, tight=False, expand=True)
 
-    def update_boards(self, boards: List[Board], selected_id: Optional[str] = None, favorites_id: Optional[str] = None, tasks_id: Optional[str] = None):
+    def update_boards(self, boards: List[Board], selected_id: Optional[str] = None, favorites_id: Optional[str] = None, tasks_id: Optional[str] = None, pending_task_count: int = 0):
         self.boards = boards
         self.selected_board_id = selected_id
         if favorites_id:
             self.favorites_board_id = favorites_id
         if tasks_id:
             self.tasks_board_id = tasks_id
+        self.pending_task_count = pending_task_count
         self.content = self._build_content()
         self.update()

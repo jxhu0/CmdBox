@@ -677,8 +677,8 @@ class TaskDialog(ft.AlertDialog):
             self.page.update()
 
     def _on_save(self, e):
-        title = self.title_field.value or ""
-        description = self.desc_field.value or ""
+        title = (self.title_field.value or "").strip()
+        description = (self.desc_field.value or "").strip()
         priority = self.priority_dropdown.value or "medium"
         if self.on_save_callback:
             self.on_save_callback(title, description, priority)

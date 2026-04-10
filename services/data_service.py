@@ -175,6 +175,10 @@ class DataService:
         self.tasks = [t for t in self.tasks if t.id != task_id]
         self.save()
 
+    def delete_completed_tasks(self):
+        self.tasks = [t for t in self.tasks if not t.completed]
+        self.save()
+
     def move_command_up(self, command_id: str, board_id: str = None):
         """将指令在当前板块内上移一位"""
         # 获取当前板块内的命令
