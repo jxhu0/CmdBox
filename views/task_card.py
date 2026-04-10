@@ -34,62 +34,62 @@ class TaskCard(ft.Container):
         self.bgcolor = ft.Colors.GREY_50 if task.completed else ft.Colors.WHITE
         self.border = ft.border.only(left=ft.border.BorderSide(3, border_color))
         self.border_radius = 10
-        self.padding = ft.padding.symmetric(horizontal=12, vertical=10)
+        self.padding = ft.padding.symmetric(horizontal=10, vertical=6)
         self.content = self._build_content()
 
-    def _build_content(self) -> ft.Column:
+    def _build_content(self) -> ft.Row:
         task = self.task
         _, label_color, _ = PRIORITY_COLORS.get(task.priority, PRIORITY_COLORS["medium"])
         priority_label = PRIORITY_LABELS.get(task.priority, "中")
 
-        # 标题行：checkbox + 标题 + 优先级标签
-        title_controls = [
-            ft.IconButton(
-                icon=ft.Icons.CHECK_CIRCLE if task.completed else ft.Icons.RADIO_BUTTON_UNCHECKED,
-                icon_size=20,
-                icon_color=ft.Colors.GREEN if task.completed else ft.Colors.GREY_400,
-                tooltip="切换完成状态",
-                on_click=lambda e: self.on_toggle_complete(self.task),
-                style=ft.ButtonStyle(padding=0)
-            ),
+        # 左侧：checkbox + 标题 + 描述
+        title_and_desc_controls = [
             ft.Text(
                 task.title,
                 size=15,
                 weight=ft.FontWeight.W_600,
                 color=ft.Colors.GREY_500 if task.completed else ft.Colors.GREY_800,
-                expand=True,
                 overflow=ft.TextOverflow.ELLIPSIS,
                 max_lines=1
             ),
+        ]
+
+        if task.description:
+            title_and_desc_controls.append(
+                ft.Text(
+                    "· " + task.description,
+                    size=13,
+                    color=ft.Colors.GREY_500 if task.completed else ft.Colors.GREY_600,
+                    overflow=ft.TextOverflow.ELLIPSIS,
+                    max_lines=1
+                )
+            )
+
+        left_content = ft.Row(
+            [
+                ft.IconButton(
+                    icon=ft.Icons.CHECK_CIRCLE if task.completed else ft.Icons.RADIO_BUTTON_UNCHECKED,
+                    icon_size=20,
+                    icon_color=ft.Colors.GREEN if task.completed else ft.Colors.GREY_400,
+                    tooltip="切换完成状态",
+                    on_click=lambda e: self.on_toggle_complete(self.task),
+                    style=ft.ButtonStyle(padding=0)
+                ),
+                *title_and_desc_controls,
+            ],
+            spacing=6,
+            tight=True,
+            expand=True
+        )
+
+        # 右侧：优先级标签 + 编辑 + 删除
+        right_controls = ft.Row([
             ft.Container(
                 content=ft.Text(priority_label, size=11, color=label_color, weight=ft.FontWeight.W_500),
                 bgcolor=PRIORITY_COLORS.get(task.priority, PRIORITY_COLORS["medium"])[0],
                 padding=ft.padding.symmetric(horizontal=6, vertical=2),
                 border_radius=8
             ),
-        ]
-
-        content_controls = [
-            ft.Row(title_controls, spacing=4, alignment=ft.MainAxisAlignment.START)
-        ]
-
-        # 描述行
-        if task.description:
-            content_controls.append(
-                ft.Container(
-                    content=ft.Text(
-                        task.description,
-                        size=13,
-                        color=ft.Colors.GREY_500 if task.completed else ft.Colors.GREY_600,
-                        max_lines=2,
-                        overflow=ft.TextOverflow.ELLIPSIS
-                    ),
-                    margin=ft.margin.only(left=38)
-                )
-            )
-
-        # 操作按钮行
-        action_row = ft.Row([
             ft.IconButton(
                 icon=ft.Icons.EDIT_OUTLINED,
                 icon_size=14,
@@ -104,8 +104,11 @@ class TaskCard(ft.Container):
                 tooltip="删除",
                 on_click=lambda e: self.on_delete(self.task)
             ),
-        ], spacing=0, alignment=ft.MainAxisAlignment.END)
+        ], spacing=0, tight=True)
 
-        content_controls.append(action_row)
-
-        return ft.Column(content_controls, spacing=6, tight=True)
+        return ft.Row(
+            [left_content, right_controls],
+            spacing=8,
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER
+        )
