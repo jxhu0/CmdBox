@@ -112,8 +112,15 @@ class TaskList(ft.Column):
         cards.append(self._build_sort_bar())
 
         # 待办任务
-        for task in pending:
-            cards.append(self._build_task_card(task))
+        if pending:
+            for task in pending:
+                cards.append(self._build_task_card(task))
+        else:
+            # 无待办任务时显示空状态
+            cards.append(ft.Container(
+                content=ft.Text("暂无待办任务", size=13, color=ft.Colors.GREY_400),
+                padding=ft.padding.symmetric(vertical=12),
+            ))
 
         # 已完成任务（折叠区域）
         if completed:
