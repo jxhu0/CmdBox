@@ -54,7 +54,7 @@ class TaskCard(ft.Container):
             ),
             ft.Text(
                 task.title,
-                size=13,
+                size=15,
                 weight=ft.FontWeight.W_600,
                 color=ft.Colors.GREY_500 if task.completed else ft.Colors.GREY_800,
                 expand=True,
@@ -62,7 +62,7 @@ class TaskCard(ft.Container):
                 max_lines=1
             ),
             ft.Container(
-                content=ft.Text(priority_label, size=10, color=label_color, weight=ft.FontWeight.W_500),
+                content=ft.Text(priority_label, size=11, color=label_color, weight=ft.FontWeight.W_500),
                 bgcolor=PRIORITY_COLORS.get(task.priority, PRIORITY_COLORS["medium"])[0],
                 padding=ft.padding.symmetric(horizontal=6, vertical=2),
                 border_radius=8
@@ -79,7 +79,7 @@ class TaskCard(ft.Container):
                 ft.Container(
                     content=ft.Text(
                         task.description,
-                        size=11,
+                        size=13,
                         color=ft.Colors.GREY_500 if task.completed else ft.Colors.GREY_600,
                         max_lines=2,
                         overflow=ft.TextOverflow.ELLIPSIS
