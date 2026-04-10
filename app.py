@@ -319,6 +319,7 @@ class CmdBoxApp:
 
         # 加载初始数据
         self._refresh_commands()
+        self._refresh_sidebar()
 
     def _refresh_commands(self):
         """刷新指令列表"""
