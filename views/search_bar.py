@@ -2,6 +2,7 @@
 import flet as ft
 from typing import List, Callable, Optional
 from models.board import Board
+from utils.helpers import get_icon_display_text
 
 
 class SearchBar(ft.Container):
@@ -39,7 +40,7 @@ class SearchBar(ft.Container):
         # 板块下拉选择
         board_options = [ft.dropdown.DropdownOption("all", "全部板块")]
         board_options.extend([
-            ft.dropdown.DropdownOption(b.id, f"{b.icon} {b.name}")
+            ft.dropdown.DropdownOption(b.id, f"{get_icon_display_text(b.icon)} {b.name}")
             for b in self.boards
         ])
 

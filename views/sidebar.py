@@ -2,6 +2,7 @@
 import flet as ft
 from typing import List, Callable, Optional
 from models.board import Board
+from utils.helpers import create_icon_widget
 
 
 class Sidebar(ft.Container):
@@ -43,7 +44,7 @@ class Sidebar(ft.Container):
 
         # 卡片内容
         card_content = ft.Row([
-            ft.Text(board.icon, size=16),
+            create_icon_widget(board.icon, 16),
             ft.Text(board.name, size=13, weight=ft.FontWeight.W_600 if is_selected else ft.FontWeight.NORMAL,
                     color=ft.Colors.BLUE_700 if is_selected else ft.Colors.GREY_700),
             ft.Row([

@@ -2,6 +2,7 @@
 import flet as ft
 from typing import Callable, Optional
 from models.board import Board
+from utils.helpers import create_icon_widget
 
 
 class BoardDescCard(ft.Container):
@@ -30,7 +31,7 @@ class BoardDescCard(ft.Container):
             padding=12,
             border=ft.border.all(1, ft.Colors.BLUE_100),
             content=ft.Row([
-                ft.Text(self.board.icon, size=16),
+                create_icon_widget(self.board.icon, 16),
                 ft.Text(self.board.name, size=14, weight=ft.FontWeight.W_600, color=ft.Colors.BLUE_800),
                 ft.Text("·", size=14, color=ft.Colors.GREY_400),
                 ft.Text(self.board.description, size=13, color=ft.Colors.GREY_700, expand=True),

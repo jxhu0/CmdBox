@@ -1,6 +1,7 @@
 # app.py
 __version__ = "1.3.0"
 
+import os
 import flet as ft
 from pathlib import Path
 from typing import Optional, List, Dict
@@ -946,4 +947,4 @@ def main(page: ft.Page):
 
 
 if __name__ == "__main__":
-    ft.app(target=main)
+    ft.app(target=main, assets_dir=os.path.join(os.path.dirname(__file__), "assets"))

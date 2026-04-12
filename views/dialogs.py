@@ -6,6 +6,7 @@ from typing import List, Optional, Callable
 from models.board import Board
 from models.command import Command
 from models.task import Task
+from utils.helpers import is_image_icon, create_icon_widget, get_icon_display_text
 
 
 def _browse_folder(initial_dir: str) -> Optional[str]:
@@ -56,6 +57,14 @@ BOARD_ICONS = [
     "🗺️", "📡", "📶", "🔗", "🎯", "⭐", "💫", "✨", "⚡", "🔥"
 ]
 
+# 品牌图片图标列表
+BOARD_IMAGE_ICONS = [
+    {"path": "icons/tux.svg", "label": "Linux"},
+    {"path": "icons/git.svg", "label": "Git"},
+    {"path": "icons/claude.svg", "label": "Claude"},
+    {"path": "icons/openclaw.svg", "label": "OpenClaw"},
+]
+
 
 class BoardDialog(ft.AlertDialog):
     """板块弹窗（新建/编辑）"""
@@ -90,7 +99,7 @@ class BoardDialog(ft.AlertDialog):
         # 创建图标按钮
         def make_icon_btn(icon):
             btn = ft.Container(
-                content=ft.Text(icon, size=18),
+                content=create_icon_widget(icon, 18),
                 width=32,
                 height=32,
                 alignment=ft.Alignment(0, 0),
@@ -103,10 +112,30 @@ class BoardDialog(ft.AlertDialog):
                 btn.bgcolor = ft.Colors.BLUE_50
             return btn
 
+        def make_image_icon_btn(icon_info):
+            icon = icon_info["path"]
+            btn = ft.Container(
+                content=ft.Column([
+                    ft.Image(src=icon, width=22, height=22, fit=ft.BoxFit.CONTAIN),
+                    ft.Text(icon_info["label"], size=8, color=ft.Colors.GREY_600),
+                ], spacing=0, horizontal_alignment=ft.CrossAxisAlignment.CENTER, tight=True),
+                width=42,
+                height=42,
+                alignment=ft.Alignment(0, 0),
+                border_radius=4,
+                on_click=self._on_icon_select,
+                data=icon
+            )
+            if icon == self.selected_icon:
+                btn.border = ft.border.all(2, ft.Colors.BLUE_400)
+                btn.bgcolor = ft.Colors.BLUE_50
+            return btn
+
         self.icon_buttons = [make_icon_btn(icon) for icon in BOARD_ICONS]
+        self.image_icon_buttons = [make_image_icon_btn(info) for info in BOARD_IMAGE_ICONS]
 
         self.icon_preview = ft.Container(
-            content=ft.Text(self.selected_icon, size=24),
+            content=create_icon_widget(self.selected_icon, 24),
             width=50,
             height=50,
             alignment=ft.Alignment(0, 0),
@@ -121,6 +150,11 @@ class BoardDialog(ft.AlertDialog):
             ft.Container(
                 content=ft.Row(self.icon_buttons, wrap=True, spacing=2, run_spacing=2),
                 height=120
+            ),
+            ft.Text("品牌图标", size=12, color=ft.Colors.GREY_600),
+            ft.Container(
+                content=ft.Row(self.image_icon_buttons, wrap=True, spacing=4, run_spacing=4),
+                height=55
             ),
             ft.Row([
                 ft.Text("预览：", size=12),
@@ -137,9 +171,9 @@ class BoardDialog(ft.AlertDialog):
         """选择图标"""
         self.selected_icon = e.control.data
         # 更新预览
-        self.icon_preview.content = ft.Text(self.selected_icon, size=24)
+        self.icon_preview.content = create_icon_widget(self.selected_icon, 24)
         # 更新所有按钮的样式
-        for btn in self.icon_buttons:
+        for btn in self.icon_buttons + self.image_icon_buttons:
             if btn.data == self.selected_icon:
                 btn.border = ft.border.all(2, ft.Colors.BLUE_400)
                 btn.bgcolor = ft.Colors.BLUE_50
@@ -190,7 +224,7 @@ class CommandDialog(ft.AlertDialog):
         )
 
         board_options = [
-            ft.dropdown.DropdownOption(b.id, f"{b.icon} {b.name}")
+            ft.dropdown.DropdownOption(b.id, f"{get_icon_display_text(b.icon)} {b.name}")
             for b in boards
         ]
         self.board_dropdown = ft.Dropdown(
