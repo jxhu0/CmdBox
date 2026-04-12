@@ -44,7 +44,12 @@ class Sidebar(ft.Container):
 
         # 卡片内容
         card_content = ft.Row([
-            create_icon_widget(board.icon, 16),
+            ft.Container(
+                content=create_icon_widget(board.icon, 16),
+                width=20,
+                height=20,
+                alignment=ft.Alignment(0, 0),
+            ),
             ft.Text(board.name, size=13, weight=ft.FontWeight.W_600 if is_selected else ft.FontWeight.NORMAL,
                     color=ft.Colors.BLUE_700 if is_selected else ft.Colors.GREY_700),
             ft.Row([
