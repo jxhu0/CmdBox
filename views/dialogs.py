@@ -63,6 +63,8 @@ BOARD_IMAGE_ICONS = [
     {"path": "icons/git.svg", "label": "Git"},
     {"path": "icons/claude.svg", "label": "Claude"},
     {"path": "icons/openclaw.svg", "label": "OpenClaw"},
+    {"path": "icons/gear.svg", "label": "Gear"},
+    {"path": "icons/crab.svg", "label": "Rust"},
 ]
 
 
