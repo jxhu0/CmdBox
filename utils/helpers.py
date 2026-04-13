@@ -46,7 +46,8 @@ def _resolve_icon_path(icon_value: str) -> str:
 def create_icon_widget(icon_value: str, size: int = 16):
     """根据图标值创建对应的 Flet 控件
 
-    统一返回固定尺寸的 Container，确保 emoji 和图片图标尺寸一致。
+    统一返回固定宽度的 Container（不固定高度），确保横向对齐。
+    纵向对齐由 Row 的 vertical_alignment=CENTER 处理。
 
     Args:
         icon_value: emoji 字符串（如 "📁"）或图片路径（如 "icons/tux.svg"）
@@ -68,7 +69,6 @@ def create_icon_widget(icon_value: str, size: int = 16):
     return ft.Container(
         content=inner,
         width=size + 4,
-        height=size + 4,
         alignment=ft.Alignment(-1, 0),
     )
 
