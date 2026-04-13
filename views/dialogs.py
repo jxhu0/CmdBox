@@ -59,12 +59,12 @@ BOARD_ICONS = [
 
 # 品牌图片图标列表
 BOARD_IMAGE_ICONS = [
-    {"path": "icons/tux.svg", "label": "Linux"},
-    {"path": "icons/git.svg", "label": "Git"},
-    {"path": "icons/claude.svg", "label": "Claude"},
-    {"path": "icons/openclaw.svg", "label": "OpenClaw"},
-    {"path": "icons/gear.svg", "label": "Gear"},
-    {"path": "icons/crab.svg", "label": "Rust"},
+    {"path": "icons/tux.png", "label": "Linux"},
+    {"path": "icons/git.png", "label": "Git"},
+    {"path": "icons/claude.png", "label": "Claude"},
+    {"path": "icons/openclaw.png", "label": "OpenClaw"},
+    {"path": "icons/gear.png", "label": "Gear"},
+    {"path": "icons/crab.png", "label": "Rust"},
 ]
 
 

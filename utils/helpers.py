@@ -26,6 +26,16 @@ def is_image_icon(icon_value: str) -> bool:
     return isinstance(icon_value, str) and icon_value.startswith("icons/")
 
 
+def _resolve_icon_path(icon_value: str) -> str:
+    """解析图标路径，SVG 自动回退到 PNG（跨平台兼容）"""
+    if icon_value.endswith('.svg'):
+        png_path = icon_value.replace('.svg', '.png')
+        assets_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets")
+        if os.path.exists(os.path.join(assets_dir, png_path)):
+            return png_path
+    return icon_value
+
+
 def create_icon_widget(icon_value: str, size: int = 16):
     """根据图标值创建对应的 Flet 控件
 
@@ -37,8 +47,9 @@ def create_icon_widget(icon_value: str, size: int = 16):
         ft.Text（emoji）或 ft.Image（图片）
     """
     if is_image_icon(icon_value):
+        resolved = _resolve_icon_path(icon_value)
         return ft.Image(
-            src=icon_value,
+            src=resolved,
             width=size,
             height=size,
             fit=ft.BoxFit.CONTAIN,
