@@ -66,7 +66,7 @@ class Sidebar(ft.Container):
                     on_click=lambda e, bid=board.id: self.on_delete_board(bid)
                 )
             ], spacing=0)
-        ], spacing=4, tight=True)
+        ], spacing=4, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER)
 
         return ft.Container(
             key=board.id,
@@ -104,7 +104,7 @@ class Sidebar(ft.Container):
                     ft.Text("收藏", size=13, weight=ft.FontWeight.W_600 if is_selected else ft.FontWeight.NORMAL,
                             color=ft.Colors.AMBER_700 if is_selected else ft.Colors.GREY_700),
                     ft.Container(content=None, expand=True)
-                ], spacing=4, tight=True),
+                ], spacing=4, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 padding=14,
                 border_radius=8,
                 bgcolor=ft.Colors.AMBER_50 if is_selected else ft.Colors.TRANSPARENT,
@@ -142,7 +142,7 @@ class Sidebar(ft.Container):
             if badge:
                 tasks_row_controls.append(badge)
             tasks_item = ft.Container(
-                content=ft.Row(tasks_row_controls, spacing=4, tight=True),
+                content=ft.Row(tasks_row_controls, spacing=4, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 padding=14,
                 border_radius=8,
                 bgcolor=ft.Colors.GREEN_50 if is_selected else ft.Colors.TRANSPARENT,
