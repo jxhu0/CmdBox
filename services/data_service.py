@@ -27,8 +27,20 @@ class DataService:
             self._init_default_data()
             return
 
-        with open(self.data_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        try:
+            with open(self.data_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, ValueError):
+            # JSON 损坏时尝试恢复最新备份
+            restored = self._try_restore_from_backup()
+            if restored:
+                with open(self.data_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            else:
+                # 没有可用备份，备份损坏文件后重新初始化
+                self._backup_corrupted_file()
+                self._init_default_data()
+                return
 
         self.boards = [Board.from_dict(b) for b in data.get("boards", [])]
         self.commands = [Command.from_dict(c) for c in data.get("commands", [])]
@@ -95,6 +107,27 @@ class DataService:
             Board.create("Prompts", "🤖")
         ]
         self.save()
+
+    def _try_restore_from_backup(self) -> bool:
+        """尝试从最新备份恢复，返回是否成功"""
+        if not self.backup_dir.exists():
+            return False
+        backups = sorted(self.backup_dir.glob("data_*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+        for backup in backups:
+            try:
+                with open(backup, "r", encoding="utf-8") as f:
+                    json.load(f)  # 验证 JSON 有效
+                shutil.copy2(backup, self.data_file)
+                return True
+            except (json.JSONDecodeError, ValueError):
+                continue
+        return False
+
+    def _backup_corrupted_file(self):
+        """将损坏的数据文件备份为 .corrupted 文件"""
+        if self.data_file.exists():
+            corrupted_path = self.data_file.with_suffix(".json.corrupted")
+            shutil.copy2(self.data_file, corrupted_path)
 
     # Board CRUD
     def add_board(self, board: Board):
