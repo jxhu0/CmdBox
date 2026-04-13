@@ -69,7 +69,7 @@ def create_icon_widget(icon_value: str, size: int = 16):
     return ft.Container(
         content=inner,
         width=size + 4,
-        alignment=ft.Alignment(-1, 0),
+        alignment=ft.Alignment(0, 0),
     )
 
 
