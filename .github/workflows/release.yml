@@ -41,12 +41,12 @@ jobs:
       - name: Build macOS
         if: matrix.platform == 'macos'
         run: |
-          pyinstaller --name CmdBox --windowed --onedir --icon assets/icon.icns --hidden-import=pyperclip --hidden-import=pyperclip.__init__ main.py
+          pyinstaller --name CmdBox --windowed --onedir --icon assets/icon.icns --hidden-import=pyperclip --hidden-import=pyperclip.__init__ --add-data "assets:assets" main.py
 
       - name: Build Windows
         if: matrix.platform == 'windows'
         run: |
-          pyinstaller --name CmdBox --windowed --onefile --icon assets/icon.ico --hidden-import=pyperclip --hidden-import=pyperclip.__init__ main.py
+          pyinstaller --name CmdBox --windowed --onefile --icon assets/icon.ico --hidden-import=pyperclip --hidden-import=pyperclip.__init__ --add-data "assets;assets" main.py
 
       - name: Create zip for macOS
         if: matrix.os == 'macos-latest'

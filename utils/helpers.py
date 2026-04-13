@@ -1,5 +1,6 @@
 # utils/helpers.py
 import os
+import sys
 from datetime import datetime
 
 import flet as ft
@@ -26,12 +27,18 @@ def is_image_icon(icon_value: str) -> bool:
     return isinstance(icon_value, str) and icon_value.startswith("icons/")
 
 
+def _get_assets_dir():
+    """获取 assets 目录路径，兼容 PyInstaller 打包环境"""
+    if getattr(sys, 'frozen', False):
+        return os.path.join(sys._MEIPASS, "assets")
+    return os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets")
+
+
 def _resolve_icon_path(icon_value: str) -> str:
     """解析图标路径，SVG 自动回退到 PNG（跨平台兼容）"""
     if icon_value.endswith('.svg'):
         png_path = icon_value.replace('.svg', '.png')
-        assets_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets")
-        if os.path.exists(os.path.join(assets_dir, png_path)):
+        if os.path.exists(os.path.join(_get_assets_dir(), png_path)):
             return png_path
     return icon_value
 

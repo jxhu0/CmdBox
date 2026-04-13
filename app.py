@@ -2,6 +2,7 @@
 __version__ = "1.3.3"
 
 import os
+import sys
 import flet as ft
 from pathlib import Path
 from typing import Optional, List, Dict
@@ -946,5 +947,13 @@ def main(page: ft.Page):
     page.on_window_event = on_window_event
 
 
+def get_assets_dir():
+    """获取 assets 目录路径，兼容 PyInstaller 打包环境"""
+    if getattr(sys, 'frozen', False):
+        # PyInstaller 打包后，从 _MEIPASS 临时目录读取
+        return os.path.join(sys._MEIPASS, "assets")
+    return os.path.join(os.path.dirname(__file__), "assets")
+
+
 if __name__ == "__main__":
-    ft.app(target=main, assets_dir=os.path.join(os.path.dirname(__file__), "assets"))
+    ft.app(target=main, assets_dir=get_assets_dir())
