@@ -46,22 +46,31 @@ def _resolve_icon_path(icon_value: str) -> str:
 def create_icon_widget(icon_value: str, size: int = 16):
     """根据图标值创建对应的 Flet 控件
 
+    统一返回固定尺寸的 Container，确保 emoji 和图片图标尺寸一致。
+
     Args:
         icon_value: emoji 字符串（如 "📁"）或图片路径（如 "icons/tux.svg"）
         size: 图标显示尺寸
 
     Returns:
-        ft.Text（emoji）或 ft.Image（图片）
+        ft.Container，内容为 ft.Text（emoji）或 ft.Image（图片）
     """
     if is_image_icon(icon_value):
         resolved = _resolve_icon_path(icon_value)
-        return ft.Image(
+        inner = ft.Image(
             src=resolved,
             width=size,
             height=size,
             fit=ft.BoxFit.CONTAIN,
         )
-    return ft.Text(icon_value, size=size)
+    else:
+        inner = ft.Text(icon_value, size=size)
+    return ft.Container(
+        content=inner,
+        width=size + 4,
+        height=size + 4,
+        alignment=ft.Alignment(-1, 0),
+    )
 
 
 def get_icon_display_text(icon_value: str) -> str:
