@@ -86,7 +86,7 @@ class GitService:
             return False, f"提交失败: {e}"
 
     def pull(self) -> Tuple[bool, str]:
-        """拉取远程更改"""
+        """拉取远程更改，冲突时保留本地版本"""
         try:
             repo = self.git.Repo(self.repo_path)
             if not repo.remotes:
@@ -99,11 +99,9 @@ class GitService:
             try:
                 origin.fetch()
             except Exception as e:
-                # fetch 失败时不跳过拉取，而是返回失败让用户重试
                 error_msg = str(e)
                 if "Could not connect" in error_msg or "Connection" in error_msg or "timed out" in error_msg.lower():
                     return False, f"网络连接失败，请检查网络后重试"
-                # 其他错误也返回失败，不跳过
                 return False, f"获取远程信息失败: {error_msg}"
 
             # 检查远程是否有 main 分支
@@ -117,17 +115,18 @@ class GitService:
                 repo.git.merge("--abort")
                 return False, "拉取失败：存在未完成的合并操作，已清理。请重试。"
 
-            # 尝试拉取，使用 --allow-unrelated-histories 允许合并不相关的历史
+            # 拉取远程更改，冲突时保留本地版本（ours）
             try:
-                repo.git.pull("origin", target_branch, "--allow-unrelated-histories", "--no-rebase")
+                repo.git.pull("origin", target_branch, "--allow-unrelated-histories",
+                              "--no-rebase", "-X", "ours")
             except Exception as e:
                 error_msg = str(e)
-                # 如果是合并冲突，需要特殊处理
                 if "CONFLICT" in error_msg.upper() or "Merge conflict" in error_msg:
-                    # 暂存所有文件并完成合并提交
+                    # 冲突时强制使用本地版本
+                    repo.git.checkout("--ours", ".")
                     repo.git.add(".")
-                    repo.git.commit("-m", "Merge: keep local and remote changes")
-                    return True, "拉取完成（已合并本地和远程更改）"
+                    repo.git.commit("-m", "Merge: resolved by keeping local changes")
+                    return True, "拉取完成（冲突已保留本地数据）"
                 raise e
 
             return True, "拉取成功"
