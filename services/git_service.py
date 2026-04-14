@@ -113,7 +113,7 @@ class GitService:
             merge_head_path = Path(repo.git_dir) / "MERGE_HEAD"
             if merge_head_path.exists():
                 try:
-                    repo.git.checkout("--ours", ".")
+                    self._resolve_conflicts(repo)
                     repo.git.add(".")
                     repo.git.commit("-m", "Merge: resolved by keeping local changes")
                 except Exception:
@@ -131,7 +131,7 @@ class GitService:
                 error_msg = str(e)
                 if "CONFLICT" in error_msg.upper() or "Merge conflict" in error_msg:
                     # 冲突时强制使用本地版本
-                    repo.git.checkout("--ours", ".")
+                    self._resolve_conflicts(repo)
                     repo.git.add(".")
                     repo.git.commit("-m", "Merge: resolved by keeping local changes")
                     return True, "拉取完成（冲突已保留本地数据）"
@@ -202,6 +202,28 @@ class GitService:
             return True, "设置成功"
         except Exception as e:
             return False, f"设置失败: {e}"
+
+    def _resolve_conflicts(self, repo):
+        """解决合并冲突：保留本地版本，远端独有的文件接受远端版本"""
+        # checkout --ours 会对本地不存在的文件报错，需要逐个处理
+        try:
+            # 获取所有冲突文件
+            conflicts = repo.index.unmerged_blobs()
+            for filepath in conflicts:
+                try:
+                    repo.git.checkout("--ours", "--", filepath)
+                except Exception:
+                    # 本地不存在的文件（如远端新增的备份），接受远端版本
+                    try:
+                        repo.git.checkout("--theirs", "--", filepath)
+                    except Exception:
+                        pass
+        except Exception:
+            # 如果逐个处理也失败，尝试整体 checkout --ours（忽略错误）
+            try:
+                repo.git.checkout("--ours", ".")
+            except Exception:
+                pass
 
     def sync(self, data_service=None) -> Tuple[bool, str]:
         """同步：备份 -> 提交 -> 拉取 -> 推送"""
