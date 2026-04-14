@@ -6,7 +6,7 @@ from typing import List, Optional, Callable
 from models.board import Board
 from models.command import Command
 from models.task import Task
-from utils.helpers import is_image_icon, create_icon_widget, get_icon_display_text
+from utils.helpers import is_image_icon, create_icon_widget
 
 
 def _browse_folder(initial_dir: str) -> Optional[str]:
@@ -226,7 +226,7 @@ class CommandDialog(ft.AlertDialog):
         )
 
         board_options = [
-            ft.dropdown.DropdownOption(b.id, f"{get_icon_display_text(b.icon)} {b.name}")
+            ft.dropdown.DropdownOption(b.id, b.name)
             for b in boards
         ]
         self.board_dropdown = ft.Dropdown(
