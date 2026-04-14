@@ -109,11 +109,19 @@ class GitService:
             if remote_branch not in [ref.name for ref in origin.refs]:
                 return True, "远程没有对应分支，跳过拉取"
 
-            # 检查是否有未完成的合并，如果有则先中止
+            # 检查是否有未完成的合并，如果有则先完成它（保留本地版本）
             merge_head_path = Path(repo.git_dir) / "MERGE_HEAD"
             if merge_head_path.exists():
-                repo.git.merge("--abort")
-                return False, "拉取失败：存在未完成的合并操作，已清理。请重试。"
+                try:
+                    repo.git.checkout("--ours", ".")
+                    repo.git.add(".")
+                    repo.git.commit("-m", "Merge: resolved by keeping local changes")
+                except Exception:
+                    # 如果无法完成合并，则中止
+                    try:
+                        repo.git.merge("--abort")
+                    except Exception:
+                        pass
 
             # 拉取远程更改，冲突时保留本地版本（ours）
             try:
