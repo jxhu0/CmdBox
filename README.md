@@ -2,18 +2,18 @@
 
 ![](https://img.shields.io/badge/version-v1.3.11-blue)
 ![](https://img.shields.io/badge/license-MIT-green)
-![](https://img.shields.io/badge/last_update-2026--04--14-orange)
+![](https://img.shields.io/badge/last_update-2026--04--15-orange)
 
 一款用于保存和管理命令行指令及大模型 Prompt 的桌面应用。
 
 ## 功能
 
-- 📁 自定义板块分类
+- 📁 自定义板块分类，支持品牌图标（Linux、Git、Claude Code、OpenClaw、Rust 等）
 - 📋 指令增删查改
 - 🔍 实时搜索过滤
 - ⭐ 收藏置顶
 - 🏷️ 标签系统
-- 🔄 Git 仓库同步
+- 🔄 Git 仓库同步（自动合并冲突，跨平台数据安全）
 - 📋 一键复制到剪贴板
 - 📤 批量导出（JSON/CSV）
 - 🔔 自动检测更新
@@ -39,6 +39,7 @@
 - 点击右上角同步按钮，将本地数据推送到远程仓库
 - 在另一台电脑上点击同步，拉取远程更新
 - 同步成功后需要重启应用才能看到最新数据
+- 跨平台同步时自动处理冲突，保留双方数据
 
 ## 开发
 
@@ -59,13 +60,13 @@ python3 main.py
 使用 PyInstaller 打包：
 
 ```bash
-pip install pyinstaller flet-cli flet-desktop Pillow
+pip install pyinstaller flet flet-desktop
 
 # macOS
-pyinstaller --name CmdBox --windowed --onedir --icon assets/icon.icns --hidden-import=pyperclip --hidden-import=pyperclip.__init__ main.py
+pyinstaller --name CmdBox --windowed --onedir --icon assets/icon.icns --add-data "assets;assets" --hidden-import=pyperclip --hidden-import=pyperclip.__init__ main.py
 
 # Windows
-pyinstaller --name CmdBox --windowed --onefile --icon assets/icon.ico --hidden-import=pyperclip --hidden-import=pyperclip.__init__ main.py
+pyinstaller --name CmdBox --windowed --onefile --icon assets/icon.ico --add-data "assets;assets" --hidden-import=pyperclip --hidden-import=pyperclip.__init__ main.py
 ```
 
 ## 技术栈
@@ -85,6 +86,7 @@ CmdBox/
 ├── main.py             # Flet 启动文件
 ├── requirements.txt    # 依赖列表
 ├── assets/             # 应用图标
+│   └── icons/          # 品牌图标（SVG/PNG）
 ├── models/             # 数据模型
 ├── views/              # UI 组件
 ├── services/           # 服务层
