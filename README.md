@@ -9,6 +9,7 @@
 ## 功能
 
 - 📁 自定义板块分类，支持品牌图标（Linux、Git、Claude Code、OpenClaw、Rust 等）
+- ✅ 任务板块（看板视图、优先级排序、已完成折叠）
 - 📋 指令增删查改
 - 🔍 实时搜索过滤
 - ⭐ 收藏置顶
@@ -88,8 +89,17 @@ CmdBox/
 ├── assets/             # 应用图标
 │   └── icons/          # 品牌图标（SVG/PNG）
 ├── models/             # 数据模型
+│   ├── board.py        # 板块模型
+│   ├── command.py      # 命令模型
+│   └── task.py         # 任务模型
 ├── views/              # UI 组件
+│   ├── sidebar.py      # 侧边栏
+│   ├── command_list.py # 命令列表
+│   ├── task_list.py    # 任务列表
+│   └── dialogs.py      # 对话框
 ├── services/           # 服务层
+│   ├── data_service.py # 数据服务
+│   └── git_service.py  # Git 同步
 └── docs/               # 文档
 ```
 
