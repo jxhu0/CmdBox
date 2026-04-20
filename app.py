@@ -15,12 +15,14 @@ from services.update_service import UpdateService
 from models.board import Board
 from models.command import Command
 from models.task import Task
+from models.question import Question
 from views.sidebar import Sidebar
 from views.search_bar import SearchBar
 from views.command_list import CommandList
 from views.task_list import TaskList
+from views.question_list import QuestionList
 from views.board_desc_card import BoardDescCard
-from views.dialogs import BoardDialog, CommandDialog, ConfirmDialog, EditAndCopyDialog, SettingsDialog, TaskDialog
+from views.dialogs import BoardDialog, CommandDialog, ConfirmDialog, EditAndCopyDialog, SettingsDialog, TaskDialog, QuestionDialog
 from views.export_dialog import ExportDialog
 from views.setup_wizard import create_setup_wizard
 from views.update_dialog import UpdateDialog
@@ -43,6 +45,8 @@ class CmdBoxApp:
         self.FAVORITES_BOARD_ID = "__favorites__"
         # 任务板块ID（虚拟板块，不存储在数据中）
         self.TASKS_BOARD_ID = "__tasks__"
+        # 问题板块ID（虚拟板块，不存储在数据中）
+        self.QUESTIONS_BOARD_ID = "__questions__"
 
         # 状态
         self.selected_board_id: Optional[str] = self.FAVORITES_BOARD_ID
@@ -267,6 +271,15 @@ class CmdBoxApp:
             on_clear_completed=self._on_clear_completed_tasks
         )
 
+        # 问题列表
+        self.question_list = QuestionList(
+            on_toggle_asked=self._on_toggle_question_asked,
+            on_edit=self._on_edit_question,
+            on_delete=self._on_delete_question,
+            on_add_question=self._on_add_question,
+            on_clear_asked=self._on_clear_asked_questions
+        )
+
         # 板块描述卡片
         self.board_desc_card = BoardDescCard(
             board=None,
@@ -297,10 +310,16 @@ class CmdBoxApp:
             padding=ft.padding.only(left=5, right=5, top=4, bottom=5),
             visible=False
         )
+        self.question_list_container = ft.Container(
+            content=self.question_list, expand=True,
+            padding=ft.padding.only(left=5, right=5, top=4, bottom=5),
+            visible=False
+        )
         main_content = ft.Column([
             self.board_desc_container,
             self.command_list_container,
             self.task_list_container,
+            self.question_list_container,
         ], expand=True, spacing=0)
 
         # 布局（侧边栏宽度减小）
@@ -341,12 +360,15 @@ class CmdBoxApp:
     def _refresh_sidebar(self):
         """刷新侧边栏"""
         pending_count = len([t for t in self.data_service.tasks if not t.completed])
+        pending_question_count = len([q for q in self.data_service.questions if not q.asked])
         self.sidebar.update_boards(
             self.data_service.boards,
             self.selected_board_id,
             self.FAVORITES_BOARD_ID,
             tasks_id=self.TASKS_BOARD_ID,
-            pending_task_count=pending_count
+            questions_id=self.QUESTIONS_BOARD_ID,
+            pending_task_count=pending_count,
+            pending_question_count=pending_question_count
         )
         self.search_bar.update_boards(self.data_service.boards)
         self.search_bar.update_tags(self._get_all_tags())
@@ -367,6 +389,11 @@ class CmdBoxApp:
             self.show_favorites_only = False
             self.search_board_ids = None
             self._show_task_list(True)
+        elif board_id == self.QUESTIONS_BOARD_ID:
+            # 问题板块
+            self.show_favorites_only = False
+            self.search_board_ids = None
+            self._show_question_list()
         else:
             self.show_favorites_only = False
             self.search_board_ids = [board_id]
@@ -382,6 +409,8 @@ class CmdBoxApp:
         self.search_tag = tag
         if self.selected_board_id == self.TASKS_BOARD_ID:
             self._refresh_tasks()
+        elif self.selected_board_id == self.QUESTIONS_BOARD_ID:
+            self._refresh_questions()
         else:
             self._refresh_commands()
 
@@ -442,8 +471,8 @@ class CmdBoxApp:
 
     def _refresh_board_desc(self):
         """刷新板块描述卡片"""
-        # 收藏板块和任务板块不显示描述卡片
-        if self.selected_board_id in (self.FAVORITES_BOARD_ID, self.TASKS_BOARD_ID):
+        # 收藏板块、任务板块和问题板块不显示描述卡片
+        if self.selected_board_id in (self.FAVORITES_BOARD_ID, self.TASKS_BOARD_ID, self.QUESTIONS_BOARD_ID):
             self.board_desc_card.update_board(None)
             self.board_desc_container.visible = False
         elif self.selected_board_id:
@@ -627,8 +656,16 @@ class CmdBoxApp:
         """切换右侧内容区：指令列表 / 任务列表"""
         self.command_list_container.visible = not show_tasks
         self.task_list_container.visible = show_tasks
+        self.question_list_container.visible = False
         if show_tasks:
             self._refresh_tasks()
+
+    def _show_question_list(self):
+        """切换右侧内容区：问题列表"""
+        self.command_list_container.visible = False
+        self.task_list_container.visible = False
+        self.question_list_container.visible = True
+        self._refresh_questions()
 
     def _refresh_tasks(self):
         """刷新任务列表"""
@@ -642,6 +679,8 @@ class CmdBoxApp:
         """FAB 按钮点击分发"""
         if self.selected_board_id == self.TASKS_BOARD_ID:
             self._on_add_task()
+        elif self.selected_board_id == self.QUESTIONS_BOARD_ID:
+            self._on_add_question()
         else:
             self._on_add_command()
 
@@ -712,6 +751,88 @@ class CmdBoxApp:
         dialog = ConfirmDialog(
             "确认清除",
             f"确定要清除 {completed_count} 个已完成的任务吗？",
+            on_confirm=on_confirm
+        )
+        self.page.show_dialog(dialog)
+        self.page.update()
+
+    # ==================== 问题相关 ====================
+
+    def _refresh_questions(self):
+        """刷新问题列表"""
+        questions = self.data_service.get_sorted_questions()
+        if self.search_keyword:
+            keyword = self.search_keyword.lower()
+            questions = [q for q in questions if keyword in q.title.lower() or keyword in q.description.lower() or keyword in q.answer.lower()]
+        self.question_list.update_questions(questions)
+
+    def _on_add_question(self):
+        """添加问题"""
+        def on_save(title: str, description: str, answer: str, priority: str):
+            if title:
+                question = Question.create(title=title, description=description, answer=answer, priority=priority)
+                self.data_service.add_question(question)
+                self._refresh_questions()
+                self._refresh_sidebar()
+            self.page.pop_dialog()
+            self.page.update()
+
+        dialog = QuestionDialog("新建问题", on_save=on_save)
+        self.page.show_dialog(dialog)
+        self.page.update()
+
+    def _on_edit_question(self, question: Question):
+        """编辑问题"""
+        def on_save(title: str, description: str, answer: str, priority: str):
+            if title:
+                question.update(title=title, description=description, answer=answer, priority=priority)
+                self.data_service.update_question(question)
+                self._refresh_questions()
+                self._refresh_sidebar()
+            self.page.pop_dialog()
+            self.page.update()
+
+        dialog = QuestionDialog("编辑问题", question=question, on_save=on_save)
+        self.page.show_dialog(dialog)
+        self.page.update()
+
+    def _on_delete_question(self, question: Question):
+        """删除问题"""
+        def on_confirm():
+            self.data_service.delete_question(question.id)
+            self._refresh_questions()
+            self._refresh_sidebar()
+            self.page.pop_dialog()
+            self.page.update()
+
+        dialog = ConfirmDialog(
+            "确认删除",
+            f"确定要删除问题「{question.title}」吗？",
+            on_confirm=on_confirm
+        )
+        self.page.show_dialog(dialog)
+        self.page.update()
+
+    def _on_toggle_question_asked(self, question: Question):
+        """切换问题询问状态"""
+        question.update(asked=not question.asked)
+        self.data_service.update_question(question)
+        self._refresh_questions()
+        self._refresh_sidebar()
+
+    def _on_clear_asked_questions(self):
+        """清除所有已询问问题"""
+        def on_confirm():
+            self.data_service.delete_asked_questions()
+            self._refresh_questions()
+            self._refresh_sidebar()
+            self.page.pop_dialog()
+            self.page.update()
+
+        asked_count = len([q for q in self.data_service.questions if q.asked])
+        dialog = ConfirmDialog(
+            "确认清除",
+            f"确定要清除 {asked_count} 个已询问的问题吗？",
             on_confirm=on_confirm
         )
         self.page.show_dialog(dialog)

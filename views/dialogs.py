@@ -6,6 +6,7 @@ from typing import List, Optional, Callable
 from models.board import Board
 from models.command import Command
 from models.task import Task
+from models.question import Question
 from utils.helpers import is_image_icon, create_icon_widget
 
 
@@ -718,6 +719,83 @@ class TaskDialog(ft.AlertDialog):
         priority = self.priority_dropdown.value or "medium"
         if self.on_save_callback:
             self.on_save_callback(title, description, priority)
+        if self.page:
+            self.page.pop_dialog()
+            self.page.update()
+
+
+class QuestionDialog(ft.AlertDialog):
+    """问题新建/编辑对话框"""
+
+    def __init__(
+        self,
+        title: str,
+        question: Optional[Question] = None,
+        on_save: Callable[[str, str, str, str], None] = None
+    ):
+        super().__init__()
+        self.modal = True
+        self.title = ft.Text(title)
+        self.on_save_callback = on_save
+
+        self.title_field = ft.TextField(
+            label="问题标题",
+            value=question.title if question else "",
+            autofocus=True,
+            text_size=13
+        )
+        self.desc_field = ft.TextField(
+            label="问题描述（可选）",
+            value=question.description if question else "",
+            multiline=True,
+            max_lines=3,
+            text_size=13
+        )
+        self.answer_field = ft.TextField(
+            label="解答（可选）",
+            value=question.answer if question else "",
+            multiline=True,
+            min_lines=2,
+            max_lines=4,
+            text_size=13
+        )
+        self.priority_dropdown = ft.Dropdown(
+            label="优先级",
+            options=[
+                ft.dropdown.DropdownOption("high", "高优先级"),
+                ft.dropdown.DropdownOption("medium", "中优先级"),
+                ft.dropdown.DropdownOption("low", "低优先级"),
+            ],
+            value=question.priority if question else "medium",
+            text_size=13
+        )
+
+        self.content = ft.Container(
+            content=ft.Column([
+                self.title_field,
+                self.desc_field,
+                self.answer_field,
+                self.priority_dropdown
+            ], tight=True, spacing=12),
+            width=350
+        )
+        self.actions = [
+            ft.TextButton("取消", on_click=self._on_cancel),
+            ft.TextButton("保存", on_click=self._on_save)
+        ]
+
+    def _on_cancel(self, e):
+        if self.page:
+            self.page.pop_dialog()
+            self.page.update()
+
+    def _on_save(self, e):
+        title = (self.title_field.value or "").strip()
+        description = (self.desc_field.value or "").strip()
+        answer = (self.answer_field.value or "").strip()
+        priority = self.priority_dropdown.value or "medium"
+        if self.on_save_callback:
+            self.on_save_callback(title, description, answer, priority)
         if self.page:
             self.page.pop_dialog()
             self.page.update()

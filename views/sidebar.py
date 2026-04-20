@@ -19,7 +19,9 @@ class Sidebar(ft.Container):
         selected_board_id: Optional[str] = None,
         favorites_board_id: Optional[str] = None,
         tasks_board_id: Optional[str] = None,
-        pending_task_count: int = 0
+        questions_board_id: Optional[str] = None,
+        pending_task_count: int = 0,
+        pending_question_count: int = 0
     ):
         super().__init__()
         self.boards = boards
@@ -31,7 +33,9 @@ class Sidebar(ft.Container):
         self.selected_board_id = selected_board_id
         self.favorites_board_id = favorites_board_id
         self.tasks_board_id = tasks_board_id
+        self.questions_board_id = questions_board_id
         self.pending_task_count = pending_task_count
+        self.pending_question_count = pending_question_count
 
         self.width = 180
         self.bgcolor = ft.Colors.WHITE
@@ -145,6 +149,44 @@ class Sidebar(ft.Container):
                 on_click=lambda e: self.on_board_select(self.tasks_board_id)
             )
 
+        # 问题板块（固定，不可拖动）
+        questions_item = None
+        if self.questions_board_id:
+            is_selected = self.selected_board_id == self.questions_board_id
+            # 待询问数量徽章
+            q_badge = None
+            if self.pending_question_count > 0:
+                q_badge = ft.Container(
+                    content=ft.Text(
+                        str(self.pending_question_count),
+                        size=10, color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD,
+                        text_align=ft.TextAlign.CENTER
+                    ),
+                    bgcolor=ft.Colors.PURPLE_500,
+                    border_radius=10,
+                    padding=ft.padding.symmetric(horizontal=5, vertical=1),
+                )
+            questions_row_controls = [
+                ft.Container(
+                    content=ft.Icon(ft.Icons.HELP_OUTLINE, size=16, color=ft.Colors.PURPLE),
+                    margin=ft.margin.only(left=-7)
+                ),
+                ft.Container(width=2),
+                ft.Text("问题", size=13, weight=ft.FontWeight.W_600 if is_selected else ft.FontWeight.NORMAL,
+                        color=ft.Colors.PURPLE_700 if is_selected else ft.Colors.GREY_700),
+                ft.Container(content=None, expand=True),
+            ]
+            if q_badge:
+                questions_row_controls.append(q_badge)
+            questions_item = ft.Container(
+                content=ft.Row(questions_row_controls, spacing=4, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                padding=14,
+                border_radius=8,
+                bgcolor=ft.Colors.PURPLE_50 if is_selected else ft.Colors.TRANSPARENT,
+                border=ft.border.only(left=ft.border.BorderSide(3, ft.Colors.PURPLE_500)) if is_selected else None,
+                on_click=lambda e: self.on_board_select(self.questions_board_id)
+            )
+
         # 普通板块列表（可拖拽排序）
         board_items = [self._build_board_item(board) for board in self.boards]
 
@@ -179,6 +221,10 @@ class Sidebar(ft.Container):
         if tasks_item:
             content_items.append(tasks_item)
 
+        # 问题板块
+        if questions_item:
+            content_items.append(questions_item)
+
         # 收藏板块
         if fav_item:
             content_items.append(fav_item)
@@ -195,13 +241,16 @@ class Sidebar(ft.Container):
 
         return ft.Column(content_items, tight=False, expand=True)
 
-    def update_boards(self, boards: List[Board], selected_id: Optional[str] = None, favorites_id: Optional[str] = None, tasks_id: Optional[str] = None, pending_task_count: int = 0):
+    def update_boards(self, boards: List[Board], selected_id: Optional[str] = None, favorites_id: Optional[str] = None, tasks_id: Optional[str] = None, questions_id: Optional[str] = None, pending_task_count: int = 0, pending_question_count: int = 0):
         self.boards = boards
         self.selected_board_id = selected_id
         if favorites_id:
             self.favorites_board_id = favorites_id
         if tasks_id:
             self.tasks_board_id = tasks_id
+        if questions_id:
+            self.questions_board_id = questions_id
         self.pending_task_count = pending_task_count
+        self.pending_question_count = pending_question_count
         self.content = self._build_content()
         self.update()

@@ -8,6 +8,7 @@ from datetime import datetime
 from models.board import Board
 from models.command import Command
 from models.task import Task
+from models.question import Question
 
 
 class DataService:
@@ -20,6 +21,7 @@ class DataService:
         self.boards: List[Board] = []
         self.commands: List[Command] = []
         self.tasks: List[Task] = []
+        self.questions: List[Question] = []
 
     def load(self):
         """从文件加载数据"""
@@ -45,6 +47,7 @@ class DataService:
         self.boards = [Board.from_dict(b) for b in data.get("boards", [])]
         self.commands = [Command.from_dict(c) for c in data.get("commands", [])]
         self.tasks = [Task.from_dict(t) for t in data.get("tasks", [])]
+        self.questions = [Question.from_dict(q) for q in data.get("questions", [])]
 
     def save(self):
         """保存数据到文件"""
@@ -53,7 +56,8 @@ class DataService:
         data = {
             "boards": [b.to_dict() for b in self.boards],
             "commands": [c.to_dict() for c in self.commands],
-            "tasks": [t.to_dict() for t in self.tasks]
+            "tasks": [t.to_dict() for t in self.tasks],
+            "questions": [q.to_dict() for q in self.questions]
         }
 
         with open(self.data_file, "w", encoding="utf-8") as f:
@@ -210,6 +214,34 @@ class DataService:
 
     def delete_completed_tasks(self):
         self.tasks = [t for t in self.tasks if not t.completed]
+        self.save()
+
+    # Question CRUD
+    def add_question(self, question: Question):
+        self.questions.append(question)
+        self.save()
+
+    def get_question(self, question_id: str) -> Optional[Question]:
+        for question in self.questions:
+            if question.id == question_id:
+                return question
+        return None
+
+    def get_sorted_questions(self) -> List[Question]:
+        """按优先级排序（高→中→低），同优先级按创建时间倒序"""
+        priority_order = {"high": 0, "medium": 1, "low": 2}
+        sorted_by_time = sorted(self.questions, key=lambda q: q.created_at or "", reverse=True)
+        return sorted(sorted_by_time, key=lambda q: priority_order.get(q.priority, 1))
+
+    def update_question(self, question: Question):
+        self.save()
+
+    def delete_question(self, question_id: str):
+        self.questions = [q for q in self.questions if q.id != question_id]
+        self.save()
+
+    def delete_asked_questions(self):
+        self.questions = [q for q in self.questions if not q.asked]
         self.save()
 
     def move_command_up(self, command_id: str, board_id: str = None):
