@@ -2,10 +2,10 @@
 
 
 a = Analysis(
-    ['app.py'],
+    ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('assets', 'assets')],
     hiddenimports=['pyperclip', 'pyperclip.__init__'],
     hookspath=[],
     hooksconfig={},

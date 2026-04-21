@@ -1,8 +1,11 @@
 # models/question.py
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 import uuid
+
+# 北京时间 UTC+8
+_BJ_TZ = timezone(timedelta(hours=8))
 
 
 @dataclass
@@ -14,6 +17,7 @@ class Question:
     answer: str = ""
     priority: str = "medium"  # high / medium / low
     asked: bool = False
+    asked_at: str = ""
     created_at: str = ""
     updated_at: str = ""
 
@@ -34,6 +38,7 @@ class Question:
             answer=answer,
             priority=priority,
             asked=False,
+            asked_at="",
             created_at=now,
             updated_at=now
         )
@@ -47,6 +52,7 @@ class Question:
             "answer": self.answer,
             "priority": self.priority,
             "asked": self.asked,
+            "asked_at": self.asked_at,
             "created_at": self.created_at,
             "updated_at": self.updated_at
         }
@@ -61,6 +67,7 @@ class Question:
             answer=data.get("answer", ""),
             priority=data.get("priority", "medium"),
             asked=data.get("asked", False),
+            asked_at=data.get("asked_at", ""),
             created_at=data.get("created_at", ""),
             updated_at=data.get("updated_at", "")
         )
@@ -84,4 +91,8 @@ class Question:
             self.priority = priority
         if asked is not None:
             self.asked = asked
+            if asked:
+                self.asked_at = datetime.now(_BJ_TZ).strftime("%Y-%m-%d %H:%M")
+            else:
+                self.asked_at = ""
         self.updated_at = datetime.now().isoformat()

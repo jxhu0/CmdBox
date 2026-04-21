@@ -42,7 +42,7 @@ class QuestionCard(ft.Container):
         _, label_color, _ = PRIORITY_COLORS.get(question.priority, PRIORITY_COLORS["medium"])
         priority_label = PRIORITY_LABELS.get(question.priority, "中")
 
-        # 左侧：checkbox + 标题 + 描述 + 解答摘要
+        # 左侧文本区：标题 + 描述 + 解答（纵向排列）
         text_controls = [
             ft.Text(
                 question.title,
@@ -57,7 +57,7 @@ class QuestionCard(ft.Container):
         if question.description:
             text_controls.append(
                 ft.Text(
-                    "· " + question.description,
+                    question.description,
                     size=13,
                     color=ft.Colors.GREY_500 if question.asked else ft.Colors.GREY_600,
                     overflow=ft.TextOverflow.ELLIPSIS,
@@ -71,10 +71,21 @@ class QuestionCard(ft.Container):
                     "\U0001f4ac " + question.answer,
                     size=12,
                     color=ft.Colors.GREY_400 if question.asked else ft.Colors.BLUE_400,
-                    overflow=ft.TextOverflow.ELLIPSIS,
-                    max_lines=1
                 )
             )
+
+        # 底部行：时间戳
+        bottom_controls = []
+        if question.asked and question.asked_at:
+            bottom_controls.append(
+                ft.Text(question.asked_at, size=11, color=ft.Colors.GREY_400)
+            )
+
+        left_column_controls = [
+            ft.Column(text_controls, spacing=2, expand=True),
+        ]
+        if bottom_controls:
+            left_column_controls.append(ft.Row(bottom_controls, spacing=6))
 
         left_content = ft.Row(
             [
@@ -86,11 +97,16 @@ class QuestionCard(ft.Container):
                     on_click=lambda e: self.on_toggle_asked(self.question),
                     style=ft.ButtonStyle(padding=0)
                 ),
-                *text_controls,
+                ft.Column(
+                    left_column_controls,
+                    spacing=2,
+                    expand=True
+                ),
             ],
             spacing=6,
             tight=True,
-            expand=True
+            expand=True,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER
         )
 
         # 右侧：优先级标签 + 编辑 + 删除
