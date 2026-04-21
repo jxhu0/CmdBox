@@ -1,6 +1,6 @@
 # CmdBox
 
-![](https://img.shields.io/badge/version-v1.3.12-blue)
+![](https://img.shields.io/badge/version-v1.3.13-blue)
 ![](https://img.shields.io/badge/license-MIT-green)
 ![](https://img.shields.io/badge/last_update-2026--04--21-orange)
 
