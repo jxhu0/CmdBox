@@ -153,33 +153,17 @@ class Sidebar(ft.Container):
         questions_item = None
         if self.questions_board_id:
             is_selected = self.selected_board_id == self.questions_board_id
-            # 待询问数量徽章
-            q_badge = None
-            if self.pending_question_count > 0:
-                q_badge = ft.Container(
-                    content=ft.Text(
-                        str(self.pending_question_count),
-                        size=10, color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD,
-                        text_align=ft.TextAlign.CENTER
-                    ),
-                    bgcolor=ft.Colors.PURPLE_500,
-                    border_radius=10,
-                    padding=ft.padding.symmetric(horizontal=5, vertical=1),
-                )
-            questions_row_controls = [
-                ft.Container(
-                    content=ft.Icon(ft.Icons.HELP_OUTLINE, size=16, color=ft.Colors.PURPLE),
-                    margin=ft.margin.only(left=-7)
-                ),
-                ft.Container(width=2),
-                ft.Text("问题", size=13, weight=ft.FontWeight.W_600 if is_selected else ft.FontWeight.NORMAL,
-                        color=ft.Colors.PURPLE_700 if is_selected else ft.Colors.GREY_700),
-                ft.Container(content=None, expand=True),
-            ]
-            if q_badge:
-                questions_row_controls.append(q_badge)
             questions_item = ft.Container(
-                content=ft.Row(questions_row_controls, spacing=4, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                content=ft.Row([
+                    ft.Container(
+                        content=ft.Icon(ft.Icons.HELP_OUTLINE, size=16, color=ft.Colors.PURPLE),
+                        margin=ft.margin.only(left=-7)
+                    ),
+                    ft.Container(width=2),
+                    ft.Text("问题", size=13, weight=ft.FontWeight.W_600 if is_selected else ft.FontWeight.NORMAL,
+                            color=ft.Colors.PURPLE_700 if is_selected else ft.Colors.GREY_700),
+                    ft.Container(content=None, expand=True)
+                ], spacing=4, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 padding=14,
                 border_radius=8,
                 bgcolor=ft.Colors.PURPLE_50 if is_selected else ft.Colors.TRANSPARENT,
