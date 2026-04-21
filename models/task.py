@@ -1,8 +1,11 @@
 # models/task.py
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 import uuid
+
+# 北京时间 UTC+8
+_BJ_TZ = timezone(timedelta(hours=8))
 
 
 @dataclass
@@ -13,6 +16,7 @@ class Task:
     description: str = ""
     priority: str = "medium"  # high / medium / low
     completed: bool = False
+    completed_at: str = ""
     created_at: str = ""
     updated_at: str = ""
 
@@ -31,6 +35,7 @@ class Task:
             description=description,
             priority=priority,
             completed=False,
+            completed_at="",
             created_at=now,
             updated_at=now
         )
@@ -43,6 +48,7 @@ class Task:
             "description": self.description,
             "priority": self.priority,
             "completed": self.completed,
+            "completed_at": self.completed_at,
             "created_at": self.created_at,
             "updated_at": self.updated_at
         }
@@ -56,6 +62,7 @@ class Task:
             description=data.get("description", ""),
             priority=data.get("priority", "medium"),
             completed=data.get("completed", False),
+            completed_at=data.get("completed_at", ""),
             created_at=data.get("created_at", ""),
             updated_at=data.get("updated_at", "")
         )
@@ -76,4 +83,8 @@ class Task:
             self.priority = priority
         if completed is not None:
             self.completed = completed
+            if completed:
+                self.completed_at = datetime.now(_BJ_TZ).strftime("%Y-%m-%d %H:%M")
+            else:
+                self.completed_at = ""
         self.updated_at = datetime.now().isoformat()

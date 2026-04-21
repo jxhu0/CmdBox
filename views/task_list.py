@@ -44,9 +44,8 @@ class TaskList(ft.Column):
         mode = SORT_MODES[self.sort_mode_index][0]
         tasks = list(self.tasks)
         if mode == "priority":
+            # 先按优先级，同优先级按创建时间倒序
             tasks.sort(key=lambda t: (PRIORITY_ORDER.get(t.priority, 1), t.created_at or ""), reverse=False)
-            # priority order: high=0 < medium=1 < low=2, but we want high first, so reverse the priority
-            tasks.sort(key=lambda t: PRIORITY_ORDER.get(t.priority, 1))
         elif mode == "time":
             tasks.sort(key=lambda t: t.created_at or "", reverse=True)
         elif mode == "status":

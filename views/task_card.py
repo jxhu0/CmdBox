@@ -65,18 +65,24 @@ class TaskCard(ft.Container):
                 )
             )
 
+        left_row_controls = [
+            ft.IconButton(
+                icon=ft.Icons.CHECK_CIRCLE if task.completed else ft.Icons.RADIO_BUTTON_UNCHECKED,
+                icon_size=20,
+                icon_color=ft.Colors.GREEN if task.completed else ft.Colors.GREY_400,
+                tooltip="切换完成状态",
+                on_click=lambda e: self.on_toggle_complete(self.task),
+                style=ft.ButtonStyle(padding=0)
+            ),
+            *title_and_desc_controls,
+        ]
+        if task.completed and task.completed_at:
+            left_row_controls.append(
+                ft.Text(task.completed_at, size=11, color=ft.Colors.GREY_400)
+            )
+
         left_content = ft.Row(
-            [
-                ft.IconButton(
-                    icon=ft.Icons.CHECK_CIRCLE if task.completed else ft.Icons.RADIO_BUTTON_UNCHECKED,
-                    icon_size=20,
-                    icon_color=ft.Colors.GREEN if task.completed else ft.Colors.GREY_400,
-                    tooltip="切换完成状态",
-                    on_click=lambda e: self.on_toggle_complete(self.task),
-                    style=ft.ButtonStyle(padding=0)
-                ),
-                *title_and_desc_controls,
-            ],
+            left_row_controls,
             spacing=6,
             tight=True,
             expand=True
