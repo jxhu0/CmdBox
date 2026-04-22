@@ -77,8 +77,15 @@ class TaskCard(ft.Container):
             *title_and_desc_controls,
         ]
         if task.completed and task.completed_at:
-            left_row_controls.append(
+            completed_controls = [
                 ft.Text(task.completed_at, size=11, color=ft.Colors.GREY_400)
+            ]
+            if task.recurring:
+                completed_controls.append(
+                    ft.Icon(ft.Icons.REPLAY, size=12, color=ft.Colors.GREY_400)
+                )
+            left_row_controls.append(
+                ft.Row(completed_controls, spacing=4, tight=True)
             )
 
         left_content = ft.Row(

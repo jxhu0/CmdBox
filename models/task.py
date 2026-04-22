@@ -17,6 +17,7 @@ class Task:
     priority: str = "medium"  # high / medium / low
     completed: bool = False
     completed_at: str = ""
+    recurring: str = ""  # "" / "daily" / "weekly" / "monthly"
     created_at: str = ""
     updated_at: str = ""
 
@@ -49,6 +50,7 @@ class Task:
             "priority": self.priority,
             "completed": self.completed,
             "completed_at": self.completed_at,
+            "recurring": self.recurring,
             "created_at": self.created_at,
             "updated_at": self.updated_at
         }
@@ -63,6 +65,7 @@ class Task:
             priority=data.get("priority", "medium"),
             completed=data.get("completed", False),
             completed_at=data.get("completed_at", ""),
+            recurring=data.get("recurring", ""),
             created_at=data.get("created_at", ""),
             updated_at=data.get("updated_at", "")
         )
@@ -72,7 +75,8 @@ class Task:
         title: Optional[str] = None,
         description: Optional[str] = None,
         priority: Optional[str] = None,
-        completed: Optional[bool] = None
+        completed: Optional[bool] = None,
+        recurring: Optional[str] = None
     ):
         """更新任务信息"""
         if title is not None:
@@ -81,6 +85,8 @@ class Task:
             self.description = description
         if priority is not None:
             self.priority = priority
+        if recurring is not None:
+            self.recurring = recurring
         if completed is not None:
             self.completed = completed
             if completed:

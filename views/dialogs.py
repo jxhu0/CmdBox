@@ -694,12 +694,24 @@ class TaskDialog(ft.AlertDialog):
             value=task.priority if task else "medium",
             text_size=13
         )
+        self.recurring_dropdown = ft.Dropdown(
+            label="周期",
+            options=[
+                ft.dropdown.DropdownOption("", "不重复"),
+                ft.dropdown.DropdownOption("daily", "每天"),
+                ft.dropdown.DropdownOption("weekly", "每周"),
+                ft.dropdown.DropdownOption("monthly", "每月"),
+            ],
+            value=task.recurring if task else "",
+            text_size=13
+        )
 
         self.content = ft.Container(
             content=ft.Column([
                 self.title_field,
                 self.desc_field,
-                self.priority_dropdown
+                self.priority_dropdown,
+                self.recurring_dropdown
             ], tight=True, spacing=12),
             width=350
         )
@@ -717,8 +729,9 @@ class TaskDialog(ft.AlertDialog):
         title = (self.title_field.value or "").strip()
         description = (self.desc_field.value or "").strip()
         priority = self.priority_dropdown.value or "medium"
+        recurring = self.recurring_dropdown.value or ""
         if self.on_save_callback:
-            self.on_save_callback(title, description, priority)
+            self.on_save_callback(title, description, priority, recurring)
         if self.page:
             self.page.pop_dialog()
             self.page.update()

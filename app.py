@@ -6,6 +6,7 @@ import sys
 import flet as ft
 from pathlib import Path
 from typing import Optional, List, Dict
+from datetime import datetime, timedelta, timezone
 
 from services.config_service import ConfigService
 from services.data_service import DataService
@@ -121,11 +122,42 @@ class CmdBoxApp:
         self.data_service = DataService(repo_path)
         self.data_service.load()
 
+        # 重置过期的周期性任务
+        self._reset_recurring_tasks()
+
         # 构建界面
         self._build_ui()
 
         # 异步检查更新（不阻塞 UI）
         self._check_for_updates()
+
+    def _reset_recurring_tasks(self):
+        """重置过期的周期性任务"""
+        _BJ_TZ = timezone(timedelta(hours=8))
+        now = datetime.now(_BJ_TZ).date()
+        changed = False
+        for task in self.data_service.tasks:
+            if not task.completed or not task.recurring or not task.completed_at:
+                continue
+            try:
+                completed_date = datetime.strptime(task.completed_at, "%Y-%m-%d %H:%M").date()
+            except ValueError:
+                continue
+            should_reset = False
+            if task.recurring == "daily":
+                should_reset = completed_date < now
+            elif task.recurring == "weekly":
+                completed_week = completed_date - timedelta(days=completed_date.weekday())
+                current_week = now - timedelta(days=now.weekday())
+                should_reset = completed_week < current_week
+            elif task.recurring == "monthly":
+                should_reset = (completed_date.year, completed_date.month) < (now.year, now.month)
+            if should_reset:
+                task.update(completed=False)
+                self.data_service.update_task(task)
+                changed = True
+        if changed:
+            self.data_service.save()
 
     def _check_for_updates(self):
         """异步检查更新"""
@@ -686,9 +718,10 @@ class CmdBoxApp:
 
     def _on_add_task(self):
         """添加任务"""
-        def on_save(title: str, description: str, priority: str):
+        def on_save(title: str, description: str, priority: str, recurring: str = ""):
             if title:
                 task = Task.create(title=title, description=description, priority=priority)
+                task.update(recurring=recurring)
                 self.data_service.add_task(task)
                 self._refresh_tasks()
                 self._refresh_sidebar()
@@ -701,9 +734,9 @@ class CmdBoxApp:
 
     def _on_edit_task(self, task: Task):
         """编辑任务"""
-        def on_save(title: str, description: str, priority: str):
+        def on_save(title: str, description: str, priority: str, recurring: str = ""):
             if title:
-                task.update(title=title, description=description, priority=priority)
+                task.update(title=title, description=description, priority=priority, recurring=recurring)
                 self.data_service.update_task(task)
                 self._refresh_tasks()
                 self._refresh_sidebar()
