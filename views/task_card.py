@@ -20,18 +20,25 @@ class TaskCard(ft.Container):
         self,
         task: Task,
         on_toggle_complete: Callable[[Task], None],
+        on_toggle_in_progress: Callable[[Task], None],
         on_edit: Callable[[Task], None],
         on_delete: Callable[[Task], None]
     ):
         super().__init__()
         self.task = task
         self.on_toggle_complete = on_toggle_complete
+        self.on_toggle_in_progress = on_toggle_in_progress
         self.on_edit = on_edit
         self.on_delete = on_delete
 
         _, _, border_color = PRIORITY_COLORS.get(task.priority, PRIORITY_COLORS["medium"])
 
-        self.bgcolor = ft.Colors.GREY_50 if task.completed else ft.Colors.WHITE
+        if task.completed:
+            self.bgcolor = ft.Colors.GREY_50
+        elif task.in_progress:
+            self.bgcolor = ft.Colors.BLUE_50
+        else:
+            self.bgcolor = ft.Colors.WHITE
         self.border = ft.border.only(left=ft.border.BorderSide(3, border_color))
         self.border_radius = 10
         self.padding = ft.padding.symmetric(horizontal=10, vertical=6)
@@ -72,6 +79,14 @@ class TaskCard(ft.Container):
                 icon_color=ft.Colors.GREEN if task.completed else ft.Colors.GREY_400,
                 tooltip="切换完成状态",
                 on_click=lambda e: self.on_toggle_complete(self.task),
+                style=ft.ButtonStyle(padding=0)
+            ),
+            ft.IconButton(
+                icon=ft.Icons.PLAY_CIRCLE_FILL if task.in_progress else ft.Icons.PLAY_CIRCLE_OUTLINE,
+                icon_size=20,
+                icon_color=ft.Colors.BLUE if task.in_progress else ft.Colors.GREY_400,
+                tooltip="切换执行中状态",
+                on_click=lambda e: self.on_toggle_in_progress(self.task),
                 style=ft.ButtonStyle(padding=0)
             ),
             *title_and_desc_controls,

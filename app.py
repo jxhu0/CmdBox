@@ -297,6 +297,7 @@ class CmdBoxApp:
         # 任务列表
         self.task_list = TaskList(
             on_toggle_complete=self._on_toggle_task_complete,
+            on_toggle_in_progress=self._on_toggle_task_in_progress,
             on_edit=self._on_edit_task,
             on_delete=self._on_delete_task,
             on_add_task=self._on_add_task,
@@ -767,9 +768,19 @@ class CmdBoxApp:
     def _on_toggle_task_complete(self, task: Task):
         """切换任务完成状态"""
         task.update(completed=not task.completed)
+        if task.completed:
+            task.update(in_progress=False)
         self.data_service.update_task(task)
         self._refresh_tasks()
         self._refresh_sidebar()
+
+    def _on_toggle_task_in_progress(self, task: Task):
+        """切换任务执行中状态"""
+        if task.completed:
+            return
+        task.update(in_progress=not task.in_progress)
+        self.data_service.update_task(task)
+        self._refresh_tasks()
 
     def _on_clear_completed_tasks(self):
         """清除所有已完成任务"""

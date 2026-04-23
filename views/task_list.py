@@ -20,6 +20,7 @@ class TaskList(ft.Column):
     def __init__(
         self,
         on_toggle_complete: Callable[[Task], None],
+        on_toggle_in_progress: Callable[[Task], None],
         on_edit: Callable[[Task], None],
         on_delete: Callable[[Task], None],
         on_add_task: Callable[[], None],
@@ -27,6 +28,7 @@ class TaskList(ft.Column):
     ):
         super().__init__()
         self.on_toggle_complete = on_toggle_complete
+        self.on_toggle_in_progress = on_toggle_in_progress
         self.on_edit = on_edit
         self.on_delete = on_delete
         self.on_add_task = on_add_task
@@ -44,13 +46,18 @@ class TaskList(ft.Column):
         mode = SORT_MODES[self.sort_mode_index][0]
         tasks = list(self.tasks)
         if mode == "priority":
-            # 先按优先级，同优先级按创建时间倒序
-            tasks.sort(key=lambda t: (PRIORITY_ORDER.get(t.priority, 1), t.created_at or ""), reverse=False)
+            # 执行中优先，再按优先级，再按创建时间
+            tasks.sort(key=lambda t: (not t.in_progress, PRIORITY_ORDER.get(t.priority, 1), t.created_at or ""), reverse=False)
         elif mode == "time":
-            tasks.sort(key=lambda t: t.created_at or "", reverse=True)
+            # 执行中优先，再按时间倒序
+            tasks.sort(key=lambda t: (not t.in_progress, ""), reverse=False)
+            in_progress_tasks = [t for t in tasks if t.in_progress]
+            other_tasks = [t for t in tasks if not t.in_progress]
+            other_tasks.sort(key=lambda t: t.created_at or "", reverse=True)
+            tasks = in_progress_tasks + other_tasks
         elif mode == "status":
-            # pending first, then by priority
-            tasks.sort(key=lambda t: (t.completed, PRIORITY_ORDER.get(t.priority, 1)))
+            # 执行中 > 待办 > 已完成
+            tasks.sort(key=lambda t: (2 if t.completed else (0 if t.in_progress else 1), PRIORITY_ORDER.get(t.priority, 1)))
         return tasks
 
     def _build_sort_bar(self) -> ft.Control:
@@ -93,6 +100,7 @@ class TaskList(ft.Column):
         return TaskCard(
             task=task,
             on_toggle_complete=self.on_toggle_complete,
+            on_toggle_in_progress=self.on_toggle_in_progress,
             on_edit=self.on_edit,
             on_delete=self.on_delete
         )
