@@ -412,6 +412,8 @@ class CmdBoxApp:
     def _on_board_select(self, board_id: str):
         """选择板块"""
         self.selected_board_id = board_id
+        # 切换板块时清除搜索关键词
+        self.search_keyword = ""
         if board_id == self.FAVORITES_BOARD_ID:
             # 收藏板块
             self.show_favorites_only = True
@@ -434,6 +436,7 @@ class CmdBoxApp:
         self._refresh_commands()
         self._refresh_sidebar()
         self._refresh_board_desc()
+        self.search_bar.clear_search()
 
     def _on_search(self, keyword: str, board_ids: Optional[List[str]], tag: Optional[str] = None):
         """搜索"""

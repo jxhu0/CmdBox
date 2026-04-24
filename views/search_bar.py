@@ -116,3 +116,9 @@ class SearchBar(ft.Container):
         self.tags = tags
         self.content = self._build_content()
         self.update()
+
+    def clear_search(self):
+        """清空搜索框内容"""
+        if hasattr(self, 'search_input') and self.search_input.value:
+            self.search_input.value = ""
+            self.search_input.update()
