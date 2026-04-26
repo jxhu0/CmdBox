@@ -225,8 +225,58 @@ class GitService:
             except Exception:
                 pass
 
+    def _is_first_sync(self) -> bool:
+        """判断是否为首次同步（本地从未从远程拉取过数据）"""
+        try:
+            repo = self.git.Repo(self.repo_path)
+            if not repo.remotes:
+                return False
+            # 检查是否有远程跟踪分支，没有则说明从未同步过
+            origin = repo.remotes.origin
+            try:
+                origin.fetch()
+            except Exception:
+                return False
+            remote_branch = "origin/main"
+            if remote_branch not in [ref.name for ref in origin.refs]:
+                return False
+            # 本地有 main 分支但从未 merge 过远程 → 首次同步
+            local_commits = set(c.hexsha for c in repo.iter_commits("main"))
+            remote_commits = set(c.hexsha for c in repo.iter_commits("origin/main"))
+            # 如果本地和远程没有共同祖先，说明是首次同步
+            return not local_commits.intersection(remote_commits)
+        except Exception:
+            return False
+
+    def _pull_first_sync(self) -> Tuple[bool, str]:
+        """首次同步拉取：优先使用远程版本"""
+        try:
+            repo = self.git.Repo(self.repo_path)
+            origin = repo.remotes.origin
+            target_branch = "main"
+
+            try:
+                repo.git.pull("origin", target_branch, "--allow-unrelated-histories",
+                              "--no-rebase", "-X", "theirs")
+            except Exception as e:
+                error_msg = str(e)
+                if "CONFLICT" in error_msg.upper() or "Merge conflict" in error_msg:
+                    # 首次同步冲突时保留远程版本
+                    try:
+                        repo.git.checkout("--theirs", ".")
+                    except Exception:
+                        pass
+                    repo.git.add(".")
+                    repo.git.commit("-m", "Merge: first sync, prefer remote data")
+                    return True, "首次同步拉取完成（冲突已使用远程数据）"
+                raise e
+
+            return True, "首次同步拉取成功"
+        except Exception as e:
+            return False, f"首次同步拉取失败: {e}"
+
     def sync(self, data_service=None) -> Tuple[bool, str]:
-        """同步：备份 -> 提交 -> 拉取 -> 推送"""
+        """同步：备份 -> [首次: 先pull远程] -> 提交 -> 拉取 -> 推送"""
         # 同步前先创建备份
         if data_service:
             try:
@@ -235,10 +285,15 @@ class GitService:
             except Exception as e:
                 print(f"备份失败: {e}")
 
-        # 先提交本地更改（避免 pull 时冲突）
+        # 首次同步：先拉取远程数据（优先远程版本）
+        if self.has_remote() and self._is_first_sync():
+            success, msg = self._pull_first_sync()
+            if not success:
+                return False, msg
+
+        # 提交本地更改
         success, msg = self.commit(f"Sync at {datetime.now().isoformat()}")
         if not success and "没有更改" not in msg:
-            # 只有真正的错误才返回，"没有更改"不算错误
             return False, msg
 
         # 拉取远程更改
