@@ -1102,7 +1102,7 @@ def main(page: ft.Page):
     app = CmdBoxApp(page)
 
     # 处理窗口关闭事件，确保程序正确退出
-    def on_window_event(e):
+    async def on_window_event(e):
         if e.data == "close":
             # 清理 Git 资源
             try:
@@ -1110,7 +1110,7 @@ def main(page: ft.Page):
             except Exception:
                 pass
 
-            page.window.destroy()
+            await page.window.destroy()
             import os
             import sys
             # Windows 需要额外处理 Flet 子进程
