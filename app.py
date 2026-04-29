@@ -257,6 +257,12 @@ class CmdBoxApp:
                         on_click=self._on_sync
                     ),
                     ft.IconButton(
+                        icon=ft.Icons.POWER_SETTINGS_NEW,
+                        icon_size=20,
+                        tooltip="重启应用",
+                        on_click=self._on_restart
+                    ),
+                    ft.IconButton(
                         icon=ft.Icons.SETTINGS_OUTLINED,
                         icon_size=20,
                         tooltip="设置",
@@ -932,6 +938,13 @@ class CmdBoxApp:
                 self.page.update()
             self._show_snack_bar(f"同步失败: {str(ex)}", 8000)
 
+    def _on_restart(self, e):
+        """重启应用"""
+        import subprocess
+        subprocess.Popen([sys.executable] + sys.argv)
+        self.page.window.destroy()
+        os._exit(0)
+
     def _on_export_click(self, e):
         """点击导出按钮"""
         if self.export_dialog not in self.page.overlay:
@@ -1097,7 +1110,7 @@ def main(page: ft.Page):
             except Exception:
                 pass
 
-            page.window_destroy()
+            page.window.destroy()
             import os
             import sys
             # Windows 需要额外处理 Flet 子进程
