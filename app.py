@@ -938,11 +938,11 @@ class CmdBoxApp:
                 self.page.update()
             self._show_snack_bar(f"同步失败: {str(ex)}", 8000)
 
-    def _on_restart(self, e):
+    async def _on_restart(self, e):
         """重启应用"""
         import subprocess
         subprocess.Popen([sys.executable] + sys.argv)
-        self.page.window.destroy()
+        await self.page.window.destroy()
         os._exit(0)
 
     def _on_export_click(self, e):
