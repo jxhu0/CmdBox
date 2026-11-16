@@ -1,5 +1,6 @@
 # views/question_list.py
 import flet as ft
+from views.isolated import IsolatedControl
 from typing import List, Callable
 from models.question import Question
 from views.question_card import QuestionCard
@@ -14,7 +15,10 @@ SORT_MODES = [
 PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 
 
-class QuestionList(ft.Column):
+class QuestionList(IsolatedControl, ft.ListView):
+    def is_isolated(self):
+        return True
+
     """问题列表组件"""
 
     def __init__(
@@ -32,11 +36,12 @@ class QuestionList(ft.Column):
         self.on_add_question = on_add_question
         self.on_clear_asked = on_clear_asked
         self.questions: List[Question] = []
+        self._card_cache = {}
+        self._visible_limit = 20
         self.asked_expanded = False
         self.sort_mode_index = 0  # 默认按优先级
 
         self.expand = True
-        self.scroll = ft.ScrollMode.AUTO
         self.controls = self._build_empty_state()
 
     def _get_sorted_questions(self) -> List[Question]:
@@ -89,12 +94,18 @@ class QuestionList(ft.Column):
         ]
 
     def _build_question_card(self, question: Question) -> QuestionCard:
-        return QuestionCard(
+        snapshot = question.to_dict()
+        cached = self._card_cache.get(question.id)
+        if cached and cached[0] == snapshot:
+            return cached[1]
+        card = QuestionCard(
             question=question,
             on_toggle_asked=self.on_toggle_asked,
             on_edit=self.on_edit,
             on_delete=self.on_delete
         )
+        self._card_cache[question.id] = (snapshot, card)
+        return card
 
     def _build_question_cards(self) -> List[ft.Control]:
         if not self.questions:
@@ -111,7 +122,7 @@ class QuestionList(ft.Column):
 
         # 待询问问题
         if pending:
-            for question in pending:
+            for question in pending[:self._visible_limit]:
                 cards.append(self._build_question_card(question))
         else:
             cards.append(ft.Container(
@@ -151,10 +162,12 @@ class QuestionList(ft.Column):
             cards.append(asked_header)
 
             if self.asked_expanded:
-                for question in asked:
+                for question in asked[:self._visible_limit]:
                     cards.append(self._build_question_card(question))
 
         # 底部占位，为 FAB 按钮预留空间
+        if len(pending) > self._visible_limit or (self.asked_expanded and len(asked) > self._visible_limit):
+            cards.append(ft.TextButton('显示更多问题', on_click=self._load_more))
         cards.append(ft.Container(height=80))
 
         return cards
@@ -165,6 +178,13 @@ class QuestionList(ft.Column):
         self.update()
 
     def update_questions(self, questions: List[Question]):
+        active_ids = {question.id for question in questions}
+        self._card_cache = {key: value for key, value in self._card_cache.items() if key in active_ids}
         self.questions = questions
+        self.controls = self._build_question_cards()
+        self.update()
+
+    def _load_more(self, e):
+        self._visible_limit += 20
         self.controls = self._build_question_cards()
         self.update()

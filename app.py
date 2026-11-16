@@ -19,7 +19,7 @@ from models.task import Task
 from models.question import Question
 from views.sidebar import Sidebar
 from views.search_bar import SearchBar
-from views.command_list import CommandList
+from views.command_list import CommandList, CommandStack
 from views.task_list import TaskList
 from views.question_list import QuestionList
 from views.board_desc_card import BoardDescCard
@@ -74,6 +74,8 @@ class CmdBoxApp:
         self.page.window.width = 900
         self.page.window.height = 600
         self.page.theme_mode = ft.ThemeMode.LIGHT
+        self.page.window.prevent_close = True
+        self.page.window.on_event = self._on_window_event
 
         # 根据操作系统设置字体
         import platform
@@ -88,6 +90,23 @@ class CmdBoxApp:
             # Linux 等其他系统
             font_family = "Source Han Sans SC"
         self.page.theme = ft.Theme(font_family=font_family)
+
+    async def _on_window_event(self, event):
+        if event.type != ft.WindowEventType.CLOSE:
+            return
+        if getattr(self, '_syncing', False):
+            self._show_snack_bar('请等待同步完成后退出')
+            return
+        import asyncio
+        try:
+            if self.data_service:
+                await asyncio.to_thread(self.data_service.close)
+        except OSError as error:
+            self._show_snack_bar(str(error), 10000)
+            return
+        if self.git_service:
+            await asyncio.to_thread(self.git_service.cleanup)
+        await self.page.window.destroy()
 
     def _show_setup_wizard(self):
         """显示设置向导"""
@@ -107,6 +126,7 @@ class CmdBoxApp:
         # 初始化数据服务
         self.data_service = DataService(repo_path)
         self.data_service.load()
+        self.data_service.enable_background_saves(self._on_save_error)
 
         # 初始提交
         self.git_service.commit("Initial commit")
@@ -121,6 +141,7 @@ class CmdBoxApp:
         self.git_service = GitService(repo_path)
         self.data_service = DataService(repo_path)
         self.data_service.load()
+        self.data_service.enable_background_saves(self._on_save_error)
 
         # 重置过期的周期性任务
         self._reset_recurring_tasks()
@@ -154,10 +175,14 @@ class CmdBoxApp:
                 should_reset = (completed_date.year, completed_date.month) < (now.year, now.month)
             if should_reset:
                 task.update(completed=False)
-                self.data_service.update_task(task)
                 changed = True
         if changed:
             self.data_service.save()
+
+    def _on_save_error(self, error):
+        async def notify():
+            self._show_snack_bar(f'保存失败，请重试或检查数据目录：{error}', 10000)
+        self.page.run_task(notify)
 
     def _check_for_updates(self):
         """异步检查更新"""
@@ -184,17 +209,6 @@ class CmdBoxApp:
 
         thread = threading.Thread(target=check, daemon=True)
         thread.start()
-
-    def _get_latest_version_sync(self):
-        """同步获取最新版本（用于打开设置对话框时）"""
-        try:
-            has_update, latest_ver, notes = UpdateService.check_for_updates(__version__)
-            if latest_ver:
-                self.config_service.set_latest_version(latest_ver)
-                return latest_ver
-        except Exception:
-            pass
-        return self.config_service.get_latest_version()
 
     async def _show_update_dialog(self, version, notes):
         """显示更新对话框"""
@@ -299,6 +313,8 @@ class CmdBoxApp:
             on_move_up=self._on_move_up,
             on_move_down=self._on_move_down
         )
+        self._command_views = {self.selected_board_id: self.command_list}
+        self.command_stack = CommandStack([self.command_list], expand=True)
 
         # 任务列表
         self.task_list = TaskList(
@@ -340,7 +356,7 @@ class CmdBoxApp:
 
         # 内容区：指令列表 / 任务列表切换
         self.command_list_container = ft.Container(
-            content=self.command_list, expand=True,
+            content=self.command_stack, expand=True,
             padding=ft.padding.only(left=5, right=5, top=4, bottom=5),
             visible=True
         )
@@ -383,6 +399,20 @@ class CmdBoxApp:
 
     def _refresh_commands(self):
         """刷新指令列表"""
+        if self.selected_board_id in (self.TASKS_BOARD_ID, self.QUESTIONS_BOARD_ID):
+            return
+        old_view = self.command_list
+        view = self._command_views.pop(self.selected_board_id, None)
+        is_new = view is None
+        if is_new:
+            view = CommandList(
+                {board.id: board for board in self.data_service.boards},
+                self._on_copy_command, self._on_edit_command, self._on_delete_command,
+                self._on_toggle_favorite, self._on_add_command,
+                self._on_move_up, self._on_move_down)
+        self._command_views[self.selected_board_id] = view
+        self.command_list = view
+        view.boards = {board.id: board for board in self.data_service.boards}
         if self.show_favorites_only:
             # 收藏板块：显示所有收藏指令，隐藏移动按钮
             commands = self.data_service.get_favorite_commands()
@@ -394,7 +424,17 @@ class CmdBoxApp:
                 self.search_tag
             )
             self.command_list.set_show_move_buttons(True)
-        self.command_list.update_commands(commands)
+        view.update_commands(commands, update=not is_new)
+        if old_view is not view:
+            old_view.visible = False
+            view.visible = True
+            if is_new:
+                self.command_stack.controls.append(view)
+            if len(self._command_views) > 6:
+                oldest = next(iter(self._command_views))
+                removed = self._command_views.pop(oldest)
+                self.command_stack.controls.remove(removed)
+            self.command_stack.update()
 
     def _refresh_sidebar(self):
         """刷新侧边栏"""
@@ -420,6 +460,10 @@ class CmdBoxApp:
         self.selected_board_id = board_id
         # 切换板块时清除搜索关键词
         self.search_keyword = ""
+        self.search_tag = None
+        self.search_bar.reset_filters(board_id if board_id not in (
+            self.FAVORITES_BOARD_ID, self.TASKS_BOARD_ID, self.QUESTIONS_BOARD_ID
+        ) else None)
         if board_id == self.FAVORITES_BOARD_ID:
             # 收藏板块
             self.show_favorites_only = True
@@ -440,9 +484,8 @@ class CmdBoxApp:
             self.search_board_ids = [board_id]
             self._show_task_list(False)
         self._refresh_commands()
-        self._refresh_sidebar()
+        self.sidebar.select_board(board_id)
         self._refresh_board_desc()
-        self.search_bar.clear_search()
 
     def _on_search(self, keyword: str, board_ids: Optional[List[str]], tag: Optional[str] = None):
         """搜索"""
@@ -470,12 +513,9 @@ class CmdBoxApp:
                 board = Board.create(name, icon, description)
                 self.data_service.add_board(board)
                 self._refresh_sidebar()
-            self.page.pop_dialog()
-            self.page.update()
 
         dialog = BoardDialog("新建板块", on_save=on_save)
         self.page.show_dialog(dialog)
-        self.page.update()
 
     def _on_edit_board(self, board_id: str):
         """编辑板块"""
@@ -489,12 +529,9 @@ class CmdBoxApp:
                 self.data_service.update_board(board)
                 self._refresh_sidebar()
                 self._refresh_board_desc()
-            self.page.pop_dialog()
-            self.page.update()
 
         dialog = BoardDialog("编辑板块", board=board, on_save=on_save)
         self.page.show_dialog(dialog)
-        self.page.update()
 
     def _on_edit_board_desc(self, board: Board):
         """编辑板块描述（从描述卡片）"""
@@ -504,12 +541,9 @@ class CmdBoxApp:
                 self.data_service.update_board(board)
                 self._refresh_sidebar()
                 self._refresh_board_desc()
-            self.page.pop_dialog()
-            self.page.update()
 
         dialog = BoardDialog("编辑板块", board=board, on_save=on_save)
         self.page.show_dialog(dialog)
-        self.page.update()
 
     def _refresh_board_desc(self):
         """刷新板块描述卡片"""
@@ -524,7 +558,8 @@ class CmdBoxApp:
         else:
             self.board_desc_card.update_board(None)
             self.board_desc_container.visible = False
-        self.page.update()
+        self.page.update(self.board_desc_container, self.command_list_container,
+                         self.task_list_container, self.question_list_container)
 
     def _on_delete_board(self, board_id: str):
         """删除板块"""
@@ -536,10 +571,15 @@ class CmdBoxApp:
             deleted_count = self.data_service.delete_board(board_id)
             # 如果删除的是当前选中的板块，清除选择
             if self.selected_board_id == board_id:
-                self.selected_board_id = None
+                self.selected_board_id = self.FAVORITES_BOARD_ID
+                self.show_favorites_only = True
                 self.search_board_ids = None
+                self.search_keyword = ''
+                self.search_tag = None
+                self.search_bar.reset_filters()
             self._refresh_sidebar()
             self._refresh_commands()
+            self._refresh_board_desc()
             self._show_snack_bar(f"已删除板块「{board.name}」及 {deleted_count} 条指令")
 
         dialog = ConfirmDialog(
@@ -548,7 +588,6 @@ class CmdBoxApp:
             on_confirm=on_confirm
         )
         self.page.show_dialog(dialog)
-        self.page.update()
 
     def _on_reorder_boards(self, board_ids: list):
         """处理板块拖拽重排序"""
@@ -573,6 +612,7 @@ class CmdBoxApp:
                 is_favorite=kwargs.get("is_favorite", False)
             )
             self.data_service.add_command(command)
+            self.search_bar.update_tags(self._get_all_tags())
             self._refresh_commands()
 
         dialog = CommandDialog(
@@ -583,7 +623,6 @@ class CmdBoxApp:
             on_save=on_save
         )
         self.page.show_dialog(dialog)
-        self.page.update()
 
     def _on_copy_command(self, command: Command):
         """复制指令"""
@@ -634,6 +673,7 @@ class CmdBoxApp:
                 is_favorite=kwargs.get("is_favorite", False)
             )
             self.data_service.update_command(command)
+            self.search_bar.update_tags(self._get_all_tags())
             self._refresh_commands()
 
         dialog = CommandDialog(
@@ -644,12 +684,12 @@ class CmdBoxApp:
             on_save=on_save
         )
         self.page.show_dialog(dialog)
-        self.page.update()
 
     def _on_delete_command(self, command: Command):
         """删除指令"""
         def on_confirm():
             self.data_service.delete_command(command.id)
+            self.search_bar.update_tags(self._get_all_tags())
             self._refresh_commands()
 
         dialog = ConfirmDialog(
@@ -658,7 +698,6 @@ class CmdBoxApp:
             on_confirm=on_confirm
         )
         self.page.show_dialog(dialog)
-        self.page.update()
 
     def _on_toggle_favorite(self, command: Command):
         """切换收藏"""
@@ -735,12 +774,9 @@ class CmdBoxApp:
                 self.data_service.add_task(task)
                 self._refresh_tasks()
                 self._refresh_sidebar()
-            self.page.pop_dialog()
-            self.page.update()
 
         dialog = TaskDialog("新建任务", on_save=on_save)
         self.page.show_dialog(dialog)
-        self.page.update()
 
     def _on_edit_task(self, task: Task):
         """编辑任务"""
@@ -750,12 +786,9 @@ class CmdBoxApp:
                 self.data_service.update_task(task)
                 self._refresh_tasks()
                 self._refresh_sidebar()
-            self.page.pop_dialog()
-            self.page.update()
 
         dialog = TaskDialog("编辑任务", task=task, on_save=on_save)
         self.page.show_dialog(dialog)
-        self.page.update()
 
     def _on_delete_task(self, task: Task):
         """删除任务"""
@@ -763,8 +796,6 @@ class CmdBoxApp:
             self.data_service.delete_task(task.id)
             self._refresh_tasks()
             self._refresh_sidebar()
-            self.page.pop_dialog()
-            self.page.update()
 
         dialog = ConfirmDialog(
             "确认删除",
@@ -772,7 +803,6 @@ class CmdBoxApp:
             on_confirm=on_confirm
         )
         self.page.show_dialog(dialog)
-        self.page.update()
 
     def _on_toggle_task_complete(self, task: Task):
         """切换任务完成状态"""
@@ -797,8 +827,6 @@ class CmdBoxApp:
             self.data_service.delete_completed_tasks()
             self._refresh_tasks()
             self._refresh_sidebar()
-            self.page.pop_dialog()
-            self.page.update()
 
         completed_count = len([t for t in self.data_service.tasks if t.completed])
         dialog = ConfirmDialog(
@@ -807,7 +835,6 @@ class CmdBoxApp:
             on_confirm=on_confirm
         )
         self.page.show_dialog(dialog)
-        self.page.update()
 
     # ==================== 问题相关 ====================
 
@@ -827,12 +854,9 @@ class CmdBoxApp:
                 self.data_service.add_question(question)
                 self._refresh_questions()
                 self._refresh_sidebar()
-            self.page.pop_dialog()
-            self.page.update()
 
         dialog = QuestionDialog("新建问题", on_save=on_save)
         self.page.show_dialog(dialog)
-        self.page.update()
 
     def _on_edit_question(self, question: Question):
         """编辑问题"""
@@ -842,12 +866,9 @@ class CmdBoxApp:
                 self.data_service.update_question(question)
                 self._refresh_questions()
                 self._refresh_sidebar()
-            self.page.pop_dialog()
-            self.page.update()
 
         dialog = QuestionDialog("编辑问题", question=question, on_save=on_save)
         self.page.show_dialog(dialog)
-        self.page.update()
 
     def _on_delete_question(self, question: Question):
         """删除问题"""
@@ -855,8 +876,6 @@ class CmdBoxApp:
             self.data_service.delete_question(question.id)
             self._refresh_questions()
             self._refresh_sidebar()
-            self.page.pop_dialog()
-            self.page.update()
 
         dialog = ConfirmDialog(
             "确认删除",
@@ -864,7 +883,6 @@ class CmdBoxApp:
             on_confirm=on_confirm
         )
         self.page.show_dialog(dialog)
-        self.page.update()
 
     def _on_toggle_question_asked(self, question: Question):
         """切换问题询问状态"""
@@ -879,8 +897,6 @@ class CmdBoxApp:
             self.data_service.delete_asked_questions()
             self._refresh_questions()
             self._refresh_sidebar()
-            self.page.pop_dialog()
-            self.page.update()
 
         asked_count = len([q for q in self.data_service.questions if q.asked])
         dialog = ConfirmDialog(
@@ -889,14 +905,23 @@ class CmdBoxApp:
             on_confirm=on_confirm
         )
         self.page.show_dialog(dialog)
-        self.page.update()
 
     def _on_sync(self, e):
         """同步"""
+        if getattr(self, '_syncing', False):
+            return
+        self._syncing = True
+        edit_controls = [self.sidebar, self.command_stack, self.task_list,
+                         self.question_list, self.add_btn]
+        for control in edit_controls:
+            control.disabled = True
+        self.page.update(*edit_controls)
         syncing_snack = None
         try:
             # 先保存当前数据
             self.data_service.save()
+
+            self.data_service.flush()
 
             # 检查是否有远程仓库
             if not self.git_service.has_remote():
@@ -937,10 +962,24 @@ class CmdBoxApp:
                     self.page.overlay.remove(syncing_snack)
                 self.page.update()
             self._show_snack_bar(f"同步失败: {str(ex)}", 8000)
+        finally:
+            self._syncing = False
+            for control in edit_controls:
+                control.disabled = False
+            self.page.update(*edit_controls)
 
     async def _on_restart(self, e):
         """重启应用"""
+        if getattr(self, '_syncing', False):
+            self._show_snack_bar('请等待同步完成后重启')
+            return
         import subprocess
+        import asyncio
+        try:
+            await asyncio.to_thread(self.data_service.flush)
+        except OSError as error:
+            self._show_snack_bar(str(error), 10000)
+            return
         subprocess.Popen([sys.executable] + sys.argv)
         await self.page.window.destroy()
         os._exit(0)
@@ -1045,6 +1084,9 @@ set thePath to POSIX path of (choose file name default name "{filename}" with pr
 
     def _on_settings(self, e):
         """设置"""
+        if getattr(self, '_syncing', False):
+            self._show_snack_bar('请等待同步完成后修改设置')
+            return
         # 获取当前远程仓库地址
         current_remote_url = self.git_service.get_remote_url() or ""
 
@@ -1061,6 +1103,7 @@ set thePath to POSIX path of (choose file name default name "{filename}" with pr
         def on_restore(backup_path: str):
             """从备份恢复数据"""
             import shutil
+            self.data_service.flush()
             # 备份当前数据
             current_backup = self.data_service.data_file.with_suffix(".json.bak")
             shutil.copy2(self.data_service.data_file, current_backup)
@@ -1069,8 +1112,10 @@ set thePath to POSIX path of (choose file name default name "{filename}" with pr
             # 重新加载数据
             self.data_service.load()
             # 刷新界面
-            self._refresh_sidebar()
-            self._refresh_commands()
+            self.selected_board_id = self.FAVORITES_BOARD_ID
+            self.show_favorites_only = True
+            self.search_keyword, self.search_board_ids, self.search_tag = '', None, None
+            self._build_ui()
             self._show_snack_bar("数据已恢复（已备份当前数据）")
 
         def on_path_save(new_path: str):
@@ -1080,8 +1125,8 @@ set thePath to POSIX path of (choose file name default name "{filename}" with pr
                 self.config_service.set("repo_path", new_path)
                 self._show_snack_bar("数据存储路径已更改，请重启应用生效")
 
-        # 同步获取最新版本（直接请求不阻塞UI）
-        latest_version = self._get_latest_version_sync()
+        # 后台启动检查已缓存版本，打开设置不等待网络
+        latest_version = self.config_service.get_latest_version()
         if latest_version:
             latest_version = latest_version.lstrip("v")
 
@@ -1095,37 +1140,10 @@ set thePath to POSIX path of (choose file name default name "{filename}" with pr
             latest_version=latest_version
         )
         self.page.show_dialog(dialog)
-        self.page.update()
 
 
 def main(page: ft.Page):
-    app = CmdBoxApp(page)
-
-    # 处理窗口关闭事件，确保程序正确退出
-    async def on_window_event(e):
-        if e.data == "close":
-            # 清理 Git 资源
-            try:
-                app.git_service.cleanup()
-            except Exception:
-                pass
-
-            await page.window.destroy()
-            import os
-            import sys
-            # Windows 需要额外处理 Flet 子进程
-            if sys.platform == "win32":
-                try:
-                    import subprocess
-                    # 获取当前进程 PID，终止所有子进程
-                    current_pid = os.getpid()
-                    subprocess.run(['taskkill', '/F', '/T', '/PID', str(current_pid)],
-                                   capture_output=True, timeout=5)
-                except Exception:
-                    pass
-            os._exit(0)
-
-    page.on_window_event = on_window_event
+    CmdBoxApp(page)
 
 
 def get_assets_dir():

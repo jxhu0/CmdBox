@@ -1,11 +1,19 @@
 # views/sidebar.py
 import flet as ft
+from views.isolated import IsolatedControl
 from typing import List, Callable, Optional
 from models.board import Board
 from utils.helpers import create_icon_widget
 
 
-class Sidebar(ft.Container):
+class BoardItem(IsolatedControl, ft.Container):
+    pass
+
+
+class Sidebar(IsolatedControl, ft.Container):
+    def is_isolated(self):
+        return True
+
     """左侧板块列表"""
 
     def __init__(
@@ -41,6 +49,7 @@ class Sidebar(ft.Container):
         self.bgcolor = ft.Colors.WHITE
         self.padding = 5
         self.content = self._build_content()
+        self._metadata_snapshot = [b.to_dict() for b in self.boards]
 
     def _build_board_item(self, board: Board) -> ft.Container:
         """构建单个板块项"""
@@ -67,7 +76,7 @@ class Sidebar(ft.Container):
             ], spacing=0)
         ], spacing=4, vertical_alignment=ft.CrossAxisAlignment.CENTER)
 
-        return ft.Container(
+        return BoardItem(
             key=board.id,
             content=ft.ReorderableDragHandle(
                 content=ft.Container(
@@ -225,7 +234,62 @@ class Sidebar(ft.Container):
 
         return ft.Column(content_items, tight=False, expand=True)
 
+    def select_board(self, board_id: str):
+        """Change selection without rebuilding icons, buttons or drag handles."""
+        previous = self.selected_board_id
+        if previous == board_id:
+            return
+        self.selected_board_id = board_id
+        changed_items = []
+        items = self.content.controls
+        fixed_ids = [self.tasks_board_id, self.questions_board_id, self.favorites_board_id]
+        fixed_colors = [ft.Colors.GREEN, ft.Colors.PURPLE, ft.Colors.AMBER]
+        fixed_items = iter(items[1:])
+        for key, color in zip(fixed_ids, fixed_colors):
+            if not key:
+                continue
+            item = next(fixed_items)
+            if key in (previous, board_id):
+                changed_items.append(item)
+                selected = key == board_id
+                item.bgcolor = ft.Colors.with_opacity(0.08, color) if selected else ft.Colors.TRANSPARENT
+                item.border = ft.border.only(left=ft.border.BorderSide(3, color)) if selected else None
+                label = item.content.controls[2]
+                label.weight = ft.FontWeight.W_600 if selected else ft.FontWeight.NORMAL
+                label.color = color if selected else ft.Colors.GREY_700
+        reorderable = items[-2].content
+        for outer in reorderable.controls:
+            if outer.key in (previous, board_id):
+                selected = outer.key == board_id
+                item = outer.content.content
+                changed_items.append(item)
+                item.bgcolor = ft.Colors.BLUE_50 if selected else ft.Colors.TRANSPARENT
+                item.border = ft.border.only(left=ft.border.BorderSide(3, ft.Colors.BLUE_500)) if selected else None
+                label = item.content.controls[1]
+                label.weight = ft.FontWeight.W_600 if selected else ft.FontWeight.NORMAL
+                label.color = ft.Colors.BLUE_700 if selected else ft.Colors.GREY_700
+        for item in changed_items:
+            item.update()
+
     def update_boards(self, boards: List[Board], selected_id: Optional[str] = None, favorites_id: Optional[str] = None, tasks_id: Optional[str] = None, questions_id: Optional[str] = None, pending_task_count: int = 0, pending_question_count: int = 0):
+        snapshot = [board.to_dict() for board in boards]
+        if ([b['id'] for b in snapshot] == [b['id'] for b in self._metadata_snapshot]
+                and self.pending_task_count == pending_task_count
+                and self.pending_question_count == pending_question_count
+                and (not questions_id or self.questions_board_id == questions_id)):
+            self.boards = boards
+            self.select_board(selected_id)
+            reorderable = self.content.controls[-2].content
+            changed = False
+            for index, board in enumerate(boards):
+                if snapshot[index] != self._metadata_snapshot[index]:
+                    reorderable.controls[index] = self._build_board_item(board)
+                    changed = True
+            self._metadata_snapshot = snapshot
+            if changed:
+                reorderable.update()
+            return
+        self._metadata_snapshot = snapshot
         self.boards = boards
         self.selected_board_id = selected_id
         if favorites_id:

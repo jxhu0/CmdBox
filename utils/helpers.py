@@ -2,6 +2,7 @@
 import os
 import sys
 from datetime import datetime
+from functools import lru_cache
 
 import flet as ft
 
@@ -34,6 +35,7 @@ def _get_assets_dir():
     return os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets")
 
 
+@lru_cache(maxsize=128)
 def _resolve_icon_path(icon_value: str) -> str:
     """解析图标路径，SVG 自动回退到 PNG（跨平台兼容）"""
     if icon_value.endswith('.svg'):

@@ -1,11 +1,15 @@
 # views/board_desc_card.py
 import flet as ft
+from views.isolated import IsolatedControl
 from typing import Callable, Optional
 from models.board import Board
 from utils.helpers import create_icon_widget
 
 
-class BoardDescCard(ft.Container):
+class BoardDescCard(IsolatedControl, ft.Container):
+    def is_isolated(self):
+        return True
+
     """板块描述卡片组件"""
 
     def __init__(

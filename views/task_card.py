@@ -1,5 +1,6 @@
 # views/task_card.py
 import flet as ft
+from views.isolated import IsolatedControl
 from typing import Callable
 from models.task import Task
 
@@ -13,7 +14,7 @@ PRIORITY_COLORS = {
 PRIORITY_LABELS = {"high": "高", "medium": "中", "low": "低"}
 
 
-class TaskCard(ft.Container):
+class TaskCard(IsolatedControl, ft.Container):
     """任务卡片组件"""
 
     def __init__(

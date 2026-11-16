@@ -46,7 +46,7 @@ jobs:
       - name: Build Windows
         if: matrix.platform == 'windows'
         run: |
-          pyinstaller --name CmdBox --windowed --onefile --icon assets/icon.ico --hidden-import=pyperclip --hidden-import=pyperclip.__init__ --add-data "assets;assets" main.py
+          pyinstaller --name CmdBox --windowed --onefile --icon assets/icon.ico --hidden-import=pyperclip --hidden-import=pyperclip.__init__ --collect-data flet --collect-all flet_desktop --add-data "assets;assets" main.py
 
       - name: Create zip for macOS
         if: matrix.os == 'macos-latest'

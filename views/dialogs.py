@@ -1,5 +1,6 @@
 # views/dialogs.py
 import flet as ft
+from views.isolated import IsolatedControl
 import subprocess
 import platform
 from typing import List, Optional, Callable
@@ -8,6 +9,10 @@ from models.command import Command
 from models.task import Task
 from models.question import Question
 from utils.helpers import is_image_icon, create_icon_widget
+
+
+class DialogBody(IsolatedControl, ft.Column):
+    pass
 
 
 def _browse_folder(initial_dir: str) -> Optional[str]:
@@ -70,6 +75,7 @@ BOARD_IMAGE_ICONS = [
 
 
 class BoardDialog(ft.AlertDialog):
+    __repr__ = IsolatedControl.__repr__
     """板块弹窗（新建/编辑）"""
 
     def __init__(
@@ -146,7 +152,7 @@ class BoardDialog(ft.AlertDialog):
             border=ft.border.all(1, ft.Colors.GREY_300)
         )
 
-        self.content = ft.Column([
+        self.content = DialogBody([
             self.name_field,
             self.desc_field,
             ft.Text("选择图标", size=12, color=ft.Colors.GREY_600),
@@ -183,22 +189,21 @@ class BoardDialog(ft.AlertDialog):
             else:
                 btn.border = None
                 btn.bgcolor = None
-        self.page.update()
+        self.content.update()
 
     def _on_cancel(self, e):
         if self.page:
             self.page.pop_dialog()
-            self.page.update()
 
     def _on_save(self, e):
         if self.on_save_callback:
             self.on_save_callback(self.name_field.value, self.selected_icon, self.desc_field.value)
         if self.page:
             self.page.pop_dialog()
-            self.page.update()
 
 
 class CommandDialog(ft.AlertDialog):
+    __repr__ = IsolatedControl.__repr__
     """指令弹窗（新建/编辑）"""
 
     def __init__(
@@ -338,7 +343,6 @@ class CommandDialog(ft.AlertDialog):
     def _on_cancel(self, e):
         if self.page:
             self.page.pop_dialog()
-            self.page.update()
 
     def _on_save(self, e):
         if self.on_save_callback:
@@ -355,10 +359,10 @@ class CommandDialog(ft.AlertDialog):
             )
         if self.page:
             self.page.pop_dialog()
-            self.page.update()
 
 
 class ConfirmDialog(ft.AlertDialog):
+    __repr__ = IsolatedControl.__repr__
     """确认弹窗"""
 
     def __init__(
@@ -382,7 +386,6 @@ class ConfirmDialog(ft.AlertDialog):
     def _on_cancel(self, e):
         if self.page:
             self.page.pop_dialog()
-            self.page.update()
 
     def _on_confirm(self, e):
         if self.page:
@@ -422,13 +425,11 @@ class EditAndCopyDialog(ft.AlertDialog):
     def _on_cancel(self, e):
         if self.page:
             self.page.pop_dialog()
-            self.page.update()
 
     def _on_copy(self, e):
         self.on_copy_callback(self.edit_field.value)
         if self.page:
             self.page.pop_dialog()
-            self.page.update()
 
 
 class SettingsDialog(ft.AlertDialog):
@@ -639,12 +640,10 @@ class SettingsDialog(ft.AlertDialog):
             self.on_restore_callback(backup_path)
         if self.page:
             self.page.pop_dialog()
-            self.page.update()
 
     def _on_cancel(self, e):
         if self.page:
             self.page.pop_dialog()
-            self.page.update()
 
     def _on_save(self, e):
         new_path = self.path_data["path"].strip()
@@ -654,7 +653,6 @@ class SettingsDialog(ft.AlertDialog):
             self.on_path_save_callback(new_path)
         if self.page:
             self.page.pop_dialog()
-            self.page.update()
 
 
 class TaskDialog(ft.AlertDialog):
@@ -723,7 +721,6 @@ class TaskDialog(ft.AlertDialog):
     def _on_cancel(self, e):
         if self.page:
             self.page.pop_dialog()
-            self.page.update()
 
     def _on_save(self, e):
         title = (self.title_field.value or "").strip()
@@ -734,7 +731,6 @@ class TaskDialog(ft.AlertDialog):
             self.on_save_callback(title, description, priority, recurring)
         if self.page:
             self.page.pop_dialog()
-            self.page.update()
 
 
 class QuestionDialog(ft.AlertDialog):
@@ -800,7 +796,6 @@ class QuestionDialog(ft.AlertDialog):
     def _on_cancel(self, e):
         if self.page:
             self.page.pop_dialog()
-            self.page.update()
 
     def _on_save(self, e):
         title = (self.title_field.value or "").strip()
@@ -811,4 +806,3 @@ class QuestionDialog(ft.AlertDialog):
             self.on_save_callback(title, description, answer, priority)
         if self.page:
             self.page.pop_dialog()
-            self.page.update()

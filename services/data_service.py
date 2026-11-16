@@ -2,6 +2,10 @@
 import json
 import os
 import shutil
+import copy
+import tempfile
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional
 from pathlib import Path
 from datetime import datetime
@@ -22,9 +26,72 @@ class DataService:
         self.commands: List[Command] = []
         self.tasks: List[Task] = []
         self.questions: List[Question] = []
+        self._save_lock = threading.Lock()
+        self._executor = None
+        self._pending_save = None
+        self._writing = False
+        self._save_future = None
+        self._save_error = None
+        self._on_save_error = None
+
+    def enable_background_saves(self, on_error=None):
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='cmdbox-save')
+        self._on_save_error = on_error
+
+    def flush(self):
+        """Wait until queued data is persisted; never hide a failed write."""
+        with self._save_lock:
+            future = self._save_future
+        if future:
+            future.result()
+        if self._save_error:
+            raise OSError(f'保存数据失败: {self._save_error}') from self._save_error
+
+    def close(self):
+        self.flush()
+        if self._executor:
+            self._executor.shutdown(wait=True)
+            self._executor = None
+
+    def _write_snapshot(self, data):
+        self.data_path.mkdir(parents=True, exist_ok=True)
+        path = None
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=self.data_path,
+                                             prefix='.cmdbox-', suffix='.tmp', delete=False) as f:
+                path = f.name
+                json.dump(data, f, ensure_ascii=False, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(path, self.data_file)
+        finally:
+            if path and os.path.exists(path):
+                os.unlink(path)
+
+    def _drain_saves(self):
+        while True:
+            with self._save_lock:
+                snapshot = self._pending_save
+                self._pending_save = None
+                if snapshot is None:
+                    self._writing = False
+                    return
+            try:
+                self._write_snapshot(snapshot)
+                self._save_error = None
+            except Exception as error:
+                with self._save_lock:
+                    self._save_error = error
+                    if self._pending_save is None:
+                        self._pending_save = snapshot
+                    self._writing = False
+                if self._on_save_error:
+                    self._on_save_error(error)
+                return
 
     def load(self):
         """从文件加载数据"""
+        self.flush()
         if not self.data_file.exists():
             self._init_default_data()
             return
@@ -51,8 +118,6 @@ class DataService:
 
     def save(self):
         """保存数据到文件"""
-        self.data_path.mkdir(parents=True, exist_ok=True)
-
         data = {
             "boards": [b.to_dict() for b in self.boards],
             "commands": [c.to_dict() for c in self.commands],
@@ -60,11 +125,18 @@ class DataService:
             "questions": [q.to_dict() for q in self.questions]
         }
 
-        with open(self.data_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        if self._executor is None:
+            self._write_snapshot(data)
+        else:
+            with self._save_lock:
+                self._pending_save = copy.deepcopy(data)
+                if not self._writing:
+                    self._writing = True
+                    self._save_future = self._executor.submit(self._drain_saves)
 
     def backup(self) -> str:
         """创建数据备份，返回备份文件路径"""
+        self.flush()
         self.backup_dir.mkdir(parents=True, exist_ok=True)
 
         # 生成带时间戳的备份文件名
@@ -289,7 +361,7 @@ class DataService:
         tag: Optional[str] = None
     ) -> List[Command]:
         """搜索指令"""
-        results = self.commands
+        results = list(self.commands)
 
         # 按板块过滤
         if board_ids:

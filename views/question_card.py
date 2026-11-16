@@ -1,5 +1,6 @@
 # views/question_card.py
 import flet as ft
+from views.isolated import IsolatedControl
 from typing import Callable
 from models.question import Question
 
@@ -13,7 +14,7 @@ PRIORITY_COLORS = {
 PRIORITY_LABELS = {"high": "高", "medium": "中", "low": "低"}
 
 
-class QuestionCard(ft.Container):
+class QuestionCard(IsolatedControl, ft.Container):
     """问题卡片组件"""
 
     def __init__(

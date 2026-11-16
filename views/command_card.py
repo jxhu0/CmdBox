@@ -1,5 +1,6 @@
 # views/command_card.py
 import flet as ft
+from views.isolated import IsolatedControl
 from typing import Callable
 from models.command import Command
 from models.board import Board
@@ -66,7 +67,10 @@ def get_tag_colors(tag: str) -> tuple:
     return (ft.Colors.BLUE_50, ft.Colors.BLUE_700)
 
 
-class CommandCard(ft.Container):
+class CommandCard(IsolatedControl, ft.Container):
+    def is_isolated(self):
+        return True
+
     """指令卡片组件 - 紧凑布局设计，    """
 
     def __init__(

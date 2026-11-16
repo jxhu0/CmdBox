@@ -1,11 +1,16 @@
 # views/search_bar.py
 import flet as ft
+from views.isolated import IsolatedControl
+import asyncio
 from typing import List, Callable, Optional
 from models.board import Board
 
 
 
-class SearchBar(ft.Container):
+class SearchBar(IsolatedControl, ft.Container):
+    def is_isolated(self):
+        return True
+
     """搜索栏组件"""
 
     def __init__(
@@ -18,6 +23,7 @@ class SearchBar(ft.Container):
         self.boards = boards
         self.tags = tags
         self.on_search = on_search
+        self._search_generation = 0
 
         self.padding = 8
         self.content = self._build_content()
@@ -82,12 +88,20 @@ class SearchBar(ft.Container):
         ], spacing=0)
 
     def _on_search_change(self, e):
-        self._do_search()
+        self._search_generation += 1
+        self.page.run_task(self._debounced_search, self._search_generation)
+
+    async def _debounced_search(self, generation):
+        await asyncio.sleep(0.2)
+        if generation == self._search_generation:
+            self._do_search()
 
     def _on_board_change(self, e):
+        self._search_generation += 1
         self._do_search()
 
     def _on_tag_change(self, e):
+        self._search_generation += 1
         self._do_search()
 
     def _do_search(self):
@@ -109,16 +123,38 @@ class SearchBar(ft.Container):
 
     def update_boards(self, boards: List[Board]):
         self.boards = boards
-        self.content = self._build_content()
-        self.update()
+        snapshot = [(b.id, b.name) for b in boards]
+        if snapshot == getattr(self, '_boards_snapshot', None):
+            return
+        self._boards_snapshot = snapshot
+        self.board_dropdown.options = [ft.dropdown.DropdownOption('all', '全部板块')] + [
+            ft.dropdown.DropdownOption(b.id, b.name) for b in boards]
+        if self.board_dropdown.value not in {'all', *(b.id for b in boards)}:
+            self.board_dropdown.value = 'all'
+        self.board_dropdown.update()
 
     def update_tags(self, tags: List[str]):
         self.tags = tags
-        self.content = self._build_content()
+        snapshot = sorted(tags)
+        if snapshot == getattr(self, '_tags_snapshot', None):
+            return
+        self._tags_snapshot = snapshot
+        self.tag_dropdown.options = [ft.dropdown.DropdownOption('all', '全部标签')] + [
+            ft.dropdown.DropdownOption(tag, f'#{tag}') for tag in snapshot]
+        if self.tag_dropdown.value not in {'all', *tags}:
+            self.tag_dropdown.value = 'all'
+        self.tag_dropdown.update()
+
+    def reset_filters(self, board_id=None):
+        self._search_generation += 1
+        self.search_input.value = ''
+        self.board_dropdown.value = board_id or 'all'
+        self.tag_dropdown.value = 'all'
         self.update()
 
     def clear_search(self):
         """清空搜索框内容"""
+        self._search_generation += 1
         if hasattr(self, 'search_input') and self.search_input.value:
             self.search_input.value = ""
             self.search_input.update()

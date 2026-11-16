@@ -1,5 +1,6 @@
 # views/task_list.py
 import flet as ft
+from views.isolated import IsolatedControl
 from typing import List, Callable
 from models.task import Task
 from views.task_card import TaskCard
@@ -14,7 +15,10 @@ SORT_MODES = [
 PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 
 
-class TaskList(ft.Column):
+class TaskList(IsolatedControl, ft.ListView):
+    def is_isolated(self):
+        return True
+
     """任务列表组件"""
 
     def __init__(
@@ -34,11 +38,12 @@ class TaskList(ft.Column):
         self.on_add_task = on_add_task
         self.on_clear_completed = on_clear_completed
         self.tasks: List[Task] = []
+        self._card_cache = {}
+        self._visible_limit = 20
         self.completed_expanded = False
         self.sort_mode_index = 0  # 默认按优先级
 
         self.expand = True
-        self.scroll = ft.ScrollMode.AUTO
         self.controls = self._build_empty_state()
 
     def _get_sorted_tasks(self) -> List[Task]:
@@ -97,13 +102,19 @@ class TaskList(ft.Column):
         ]
 
     def _build_task_card(self, task: Task) -> TaskCard:
-        return TaskCard(
+        snapshot = task.to_dict()
+        cached = self._card_cache.get(task.id)
+        if cached and cached[0] == snapshot:
+            return cached[1]
+        card = TaskCard(
             task=task,
             on_toggle_complete=self.on_toggle_complete,
             on_toggle_in_progress=self.on_toggle_in_progress,
             on_edit=self.on_edit,
             on_delete=self.on_delete
         )
+        self._card_cache[task.id] = (snapshot, card)
+        return card
 
     def _build_task_cards(self) -> List[ft.Control]:
         if not self.tasks:
@@ -120,7 +131,7 @@ class TaskList(ft.Column):
 
         # 待办任务
         if pending:
-            for task in pending:
+            for task in pending[:self._visible_limit]:
                 cards.append(self._build_task_card(task))
         else:
             # 无待办任务时显示空状态
@@ -161,10 +172,12 @@ class TaskList(ft.Column):
             cards.append(completed_header)
 
             if self.completed_expanded:
-                for task in completed:
+                for task in completed[:self._visible_limit]:
                     cards.append(self._build_task_card(task))
 
         # 底部占位，为 FAB 按钮预留空间
+        if len(pending) > self._visible_limit or (self.completed_expanded and len(completed) > self._visible_limit):
+            cards.append(ft.TextButton('显示更多任务', on_click=self._load_more))
         cards.append(ft.Container(height=80))
 
         return cards
@@ -175,6 +188,13 @@ class TaskList(ft.Column):
         self.update()
 
     def update_tasks(self, tasks: List[Task]):
+        active_ids = {task.id for task in tasks}
+        self._card_cache = {key: value for key, value in self._card_cache.items() if key in active_ids}
         self.tasks = tasks
+        self.controls = self._build_task_cards()
+        self.update()
+
+    def _load_more(self, e):
+        self._visible_limit += 20
         self.controls = self._build_task_cards()
         self.update()
