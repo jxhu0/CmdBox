@@ -38,10 +38,13 @@ jobs:
           pip install -r requirements.txt
           pip install flet-cli==0.82.2 pyinstaller flet-desktop==0.82.2 Pillow
 
+      - name: Run regression tests
+        run: python -m unittest discover -s tests -v
+
       - name: Build macOS
         if: matrix.platform == 'macos'
         run: |
-          pyinstaller --name CmdBox --windowed --onedir --icon assets/icon.icns --hidden-import=pyperclip --hidden-import=pyperclip.__init__ --add-data "assets:assets" main.py
+          pyinstaller --name CmdBox --windowed --onedir --icon assets/icon.icns --hidden-import=pyperclip --hidden-import=pyperclip.__init__ --collect-data flet --collect-all flet_desktop --add-data "assets:assets" main.py
 
       - name: Build Windows
         if: matrix.platform == 'windows'
