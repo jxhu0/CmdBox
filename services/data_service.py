@@ -5,6 +5,7 @@ import shutil
 import copy
 import tempfile
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional
 from pathlib import Path
@@ -27,12 +28,16 @@ class DataService:
         self.tasks: List[Task] = []
         self.questions: List[Question] = []
         self._save_lock = threading.Lock()
+        self._save_ready = threading.Condition(self._save_lock)
+        self._save_generation = 0
+        self._flush_requested = False
         self._executor = None
         self._pending_save = None
         self._writing = False
         self._save_future = None
         self._save_error = None
         self._on_save_error = None
+        self._snapshot_cache = {name: {} for name in ('boards', 'commands', 'tasks', 'questions')}
 
     def enable_background_saves(self, on_error=None):
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='cmdbox-save')
@@ -40,10 +45,16 @@ class DataService:
 
     def flush(self):
         """Wait until queued data is persisted; never hide a failed write."""
-        with self._save_lock:
+        with self._save_ready:
+            self._flush_requested = True
+            self._save_ready.notify_all()
             future = self._save_future
-        if future:
-            future.result()
+        try:
+            if future:
+                future.result()
+        finally:
+            with self._save_ready:
+                self._flush_requested = False
         if self._save_error:
             raise OSError(f'保存数据失败: {self._save_error}') from self._save_error
 
@@ -70,7 +81,18 @@ class DataService:
 
     def _drain_saves(self):
         while True:
-            with self._save_lock:
+            with self._save_ready:
+                # Coalesce bursts of edits; flush bypasses the short delay.
+                generation = self._save_generation
+                deadline = time.monotonic() + 0.1
+                while self._pending_save is not None and not self._flush_requested:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    self._save_ready.wait(remaining)
+                    if generation != self._save_generation:
+                        generation = self._save_generation
+                        deadline = time.monotonic() + 0.1
                 snapshot = self._pending_save
                 self._pending_save = None
                 if snapshot is None:
@@ -118,18 +140,30 @@ class DataService:
 
     def save(self):
         """保存数据到文件"""
-        data = {
-            "boards": [b.to_dict() for b in self.boards],
-            "commands": [c.to_dict() for c in self.commands],
-            "tasks": [t.to_dict() for t in self.tasks],
-            "questions": [q.to_dict() for q in self.questions]
-        }
+        data = {}
+        for name in self._snapshot_cache:
+            previous = self._snapshot_cache[name]
+            current = {}
+            rows = []
+            for item in getattr(self, name):
+                # A record's update timestamp changes on edits; object identity also
+                # invalidates the cache after loading or replacing a record.
+                signature = (id(item), item.updated_at)
+                cached = previous.get(item.id)
+                if cached is None or cached[0] != signature:
+                    cached = (signature, copy.deepcopy(item.to_dict()))
+                current[item.id] = cached
+                rows.append(cached[1])
+            self._snapshot_cache[name] = current
+            data[name] = rows
 
         if self._executor is None:
             self._write_snapshot(data)
         else:
-            with self._save_lock:
-                self._pending_save = copy.deepcopy(data)
+            with self._save_ready:
+                self._pending_save = data
+                self._save_generation += 1
+                self._save_ready.notify_all()
                 if not self._writing:
                     self._writing = True
                     self._save_future = self._executor.submit(self._drain_saves)

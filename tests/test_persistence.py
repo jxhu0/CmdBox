@@ -8,6 +8,40 @@ from models.command import Command
 
 
 class PersistenceTests(unittest.TestCase):
+    def test_unchanged_records_reuse_snapshots_and_later_edits_persist(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service = DataService(directory)
+            service.commands = [Command.create('board', str(i), 'content') for i in range(100)]
+            service.enable_background_saves()
+            try:
+                service.save()
+                service.flush()
+                with patch.object(service.commands[1], 'to_dict', side_effect=AssertionError('unchanged record rebuilt')):
+                    service.commands[0].update(title='edited')
+                    service.save()
+                    service.flush()
+                saved = json.loads(service.data_file.read_text(encoding='utf-8'))
+                self.assertEqual(saved['commands'][0]['title'], 'edited')
+                self.assertEqual(saved['commands'][1]['title'], '1')
+            finally:
+                service.close()
+
+    def test_rapid_edits_coalesce_and_flush_writes_latest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service = DataService(directory)
+            service.enable_background_saves()
+            try:
+                with patch.object(service, '_write_snapshot', wraps=service._write_snapshot) as write:
+                    for index in range(10):
+                        service.commands = [Command.create('board', str(index), 'content')]
+                        service.save()
+                    service.flush()
+                    self.assertEqual(write.call_count, 1)
+                saved = json.loads(service.data_file.read_text(encoding='utf-8'))
+                self.assertEqual(saved['commands'][0]['title'], '9')
+            finally:
+                service.close()
+
     def test_background_save_does_not_wait_for_disk_and_flush_saves_latest(self):
         with tempfile.TemporaryDirectory() as directory:
             service = DataService(directory)

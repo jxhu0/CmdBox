@@ -40,6 +40,7 @@ class TaskList(IsolatedControl, ft.ListView):
         self.tasks: List[Task] = []
         self._card_cache = {}
         self._visible_limit = 20
+        self._page_start = 0
         self.completed_expanded = False
         self.sort_mode_index = 0  # 默认按优先级
 
@@ -124,6 +125,8 @@ class TaskList(IsolatedControl, ft.ListView):
         sorted_tasks = self._get_sorted_tasks()
         pending = [t for t in sorted_tasks if not t.completed]
         completed = [t for t in sorted_tasks if t.completed]
+        largest_section = max(len(pending), len(completed) if self.completed_expanded else 0)
+        self._page_start = min(self._page_start, max(0, (largest_section - 1) // self._visible_limit * self._visible_limit))
 
         cards = []
 
@@ -132,7 +135,7 @@ class TaskList(IsolatedControl, ft.ListView):
 
         # 待办任务
         if pending:
-            for task in pending[:self._visible_limit]:
+            for task in pending[self._page_start:self._page_start + self._visible_limit]:
                 cards.append(self._build_task_card(task))
         else:
             # 无待办任务时显示空状态
@@ -173,29 +176,43 @@ class TaskList(IsolatedControl, ft.ListView):
             cards.append(completed_header)
 
             if self.completed_expanded:
-                for task in completed[:self._visible_limit]:
+                for task in completed[self._page_start:self._page_start + self._visible_limit]:
                     cards.append(self._build_task_card(task))
 
         # 底部占位，为 FAB 按钮预留空间
-        if len(pending) > self._visible_limit or (self.completed_expanded and len(completed) > self._visible_limit):
-            cards.append(ft.TextButton('显示更多任务', on_click=self._load_more))
+        if self._page_start:
+            cards.append(ft.TextButton('上一页', on_click=self._previous_page))
+        if len(pending) > self._page_start + self._visible_limit or (self.completed_expanded and len(completed) > self._page_start + self._visible_limit):
+            cards.append(ft.TextButton('下一页任务', on_click=self._load_more))
         cards.append(ft.Container(height=80))
 
+        visible_ids = {item.id for item in pending[self._page_start:self._page_start + self._visible_limit]}
+        if self.completed_expanded:
+            visible_ids.update(item.id for item in completed[self._page_start:self._page_start + self._visible_limit])
+        self._card_cache = {key: value for key, value in self._card_cache.items() if key in visible_ids}
         return cards
 
     def _toggle_completed_section(self, e):
         self.completed_expanded = not self.completed_expanded
+        self._page_start = 0
         self.controls = self._build_task_cards()
         self.update()
 
     def update_tasks(self, tasks: List[Task]):
         active_ids = {task.id for task in tasks}
         self._card_cache = {key: value for key, value in self._card_cache.items() if key in active_ids}
+        if tuple(t.id for t in tasks) != tuple(t.id for t in self.tasks):
+            self._page_start = 0
         self.tasks = tasks
         self.controls = self._build_task_cards()
         self.update()
 
     def _load_more(self, e):
-        self._visible_limit += 20
+        self._page_start += self._visible_limit
+        self.controls = self._build_task_cards()
+        self.update()
+
+    def _previous_page(self, e):
+        self._page_start = max(0, self._page_start - self._visible_limit)
         self.controls = self._build_task_cards()
         self.update()

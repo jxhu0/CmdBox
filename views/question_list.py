@@ -38,6 +38,7 @@ class QuestionList(IsolatedControl, ft.ListView):
         self.questions: List[Question] = []
         self._card_cache = {}
         self._visible_limit = 20
+        self._page_start = 0
         self.asked_expanded = False
         self.sort_mode_index = 0  # 默认按优先级
 
@@ -115,6 +116,8 @@ class QuestionList(IsolatedControl, ft.ListView):
         sorted_questions = self._get_sorted_questions()
         pending = [q for q in sorted_questions if not q.asked]
         asked = [q for q in sorted_questions if q.asked]
+        largest_section = max(len(pending), len(asked) if self.asked_expanded else 0)
+        self._page_start = min(self._page_start, max(0, (largest_section - 1) // self._visible_limit * self._visible_limit))
 
         cards = []
 
@@ -123,7 +126,7 @@ class QuestionList(IsolatedControl, ft.ListView):
 
         # 待询问问题
         if pending:
-            for question in pending[:self._visible_limit]:
+            for question in pending[self._page_start:self._page_start + self._visible_limit]:
                 cards.append(self._build_question_card(question))
         else:
             cards.append(ft.Container(
@@ -163,29 +166,43 @@ class QuestionList(IsolatedControl, ft.ListView):
             cards.append(asked_header)
 
             if self.asked_expanded:
-                for question in asked[:self._visible_limit]:
+                for question in asked[self._page_start:self._page_start + self._visible_limit]:
                     cards.append(self._build_question_card(question))
 
         # 底部占位，为 FAB 按钮预留空间
-        if len(pending) > self._visible_limit or (self.asked_expanded and len(asked) > self._visible_limit):
-            cards.append(ft.TextButton('显示更多问题', on_click=self._load_more))
+        if self._page_start:
+            cards.append(ft.TextButton('上一页', on_click=self._previous_page))
+        if len(pending) > self._page_start + self._visible_limit or (self.asked_expanded and len(asked) > self._page_start + self._visible_limit):
+            cards.append(ft.TextButton('下一页问题', on_click=self._load_more))
         cards.append(ft.Container(height=80))
 
+        visible_ids = {item.id for item in pending[self._page_start:self._page_start + self._visible_limit]}
+        if self.asked_expanded:
+            visible_ids.update(item.id for item in asked[self._page_start:self._page_start + self._visible_limit])
+        self._card_cache = {key: value for key, value in self._card_cache.items() if key in visible_ids}
         return cards
 
     def _toggle_asked_section(self, e):
         self.asked_expanded = not self.asked_expanded
+        self._page_start = 0
         self.controls = self._build_question_cards()
         self.update()
 
     def update_questions(self, questions: List[Question]):
         active_ids = {question.id for question in questions}
         self._card_cache = {key: value for key, value in self._card_cache.items() if key in active_ids}
+        if tuple(q.id for q in questions) != tuple(q.id for q in self.questions):
+            self._page_start = 0
         self.questions = questions
         self.controls = self._build_question_cards()
         self.update()
 
     def _load_more(self, e):
-        self._visible_limit += 20
+        self._page_start += self._visible_limit
+        self.controls = self._build_question_cards()
+        self.update()
+
+    def _previous_page(self, e):
+        self._page_start = max(0, self._page_start - self._visible_limit)
         self.controls = self._build_question_cards()
         self.update()

@@ -43,6 +43,7 @@ class CommandList(IsolatedControl, ft.ListView):
         self.commands: List[Command] = []
         self._card_cache = {}
         self._visible_limit = 20
+        self._page_start = 0
         self._query_ids = ()
         self._render_signature = None
 
@@ -67,7 +68,7 @@ class CommandList(IsolatedControl, ft.ListView):
             return self._build_empty_state()
 
         cards = []
-        for cmd in self.commands[:self._visible_limit]:
+        for cmd in self.commands[self._page_start:self._page_start + self._visible_limit]:
             board = self.boards.get(cmd.board_id)
             if not board:
                 continue
@@ -90,14 +91,15 @@ class CommandList(IsolatedControl, ft.ListView):
             cards.append(card)
             self._card_cache[cmd.id] = (signature, card)
 
-        # Bound retained controls when browsing many boards.
-        active_ids = {cmd.id for cmd in self.commands}
-        if len(self._card_cache) > max(512, len(active_ids)):
-            self._card_cache = {key: value for key, value in self._card_cache.items() if key in active_ids}
+        # Keep only controls on the current page, including during repeated paging.
+        visible_ids = {cmd.id for cmd in self.commands[self._page_start:self._page_start + self._visible_limit]}
+        self._card_cache = {key: value for key, value in self._card_cache.items() if key in visible_ids}
 
-        if len(self.commands) > self._visible_limit:
+        if self._page_start:
+            cards.append(ft.TextButton('上一页', on_click=self._previous_page))
+        if len(self.commands) > self._page_start + self._visible_limit:
             cards.append(ft.TextButton(
-                f'显示更多（已显示 {self._visible_limit}/{len(self.commands)}）',
+                f'下一页（{self._page_start + self._visible_limit}/{len(self.commands)}）',
                 on_click=self._load_more))
         # 添加底部占位，为 FAB 按钮预留空间
         cards.append(ft.Container(height=80))
@@ -108,11 +110,12 @@ class CommandList(IsolatedControl, ft.ListView):
         ids = tuple(command.id for command in commands)
         if ids != self._query_ids:
             self._visible_limit = 20
+            self._page_start = 0
             self._query_ids = ids
         self.commands = commands
-        signature = (ids, self._visible_limit, self.show_move_buttons,
+        signature = (ids, self._visible_limit, self._page_start, self.show_move_buttons,
                      [cmd.to_dict()
-                      for cmd in commands[:self._visible_limit] if cmd.board_id in self.boards])
+                      for cmd in commands[self._page_start:self._page_start + self._visible_limit] if cmd.board_id in self.boards])
         if signature == self._render_signature:
             return
         # Snapshot values rather than holding references to mutable model tags.
@@ -123,9 +126,14 @@ class CommandList(IsolatedControl, ft.ListView):
             self.update()
 
     def _load_more(self, e):
-        self._visible_limit += 20
-        self.controls = self._build_command_cards()
-        self.update()
+        self._page_start += self._visible_limit
+        self._render_signature = None
+        self.update_commands(self.commands)
+
+    def _previous_page(self, e):
+        self._page_start = max(0, self._page_start - self._visible_limit)
+        self._render_signature = None
+        self.update_commands(self.commands)
 
     def update_boards(self, boards: Dict[str, Board]):
         self.boards = boards

@@ -455,6 +455,16 @@ class CmdBoxApp:
         boards_dict = {b.id: b for b in self.data_service.boards}
         self.command_list.update_boards(boards_dict)
 
+    def _refresh_status_counts(self):
+        """Refresh badges without rebuilding search filters or board metadata."""
+        self.sidebar.update_boards(
+            self.data_service.boards, self.selected_board_id,
+            self.FAVORITES_BOARD_ID, tasks_id=self.TASKS_BOARD_ID,
+            questions_id=self.QUESTIONS_BOARD_ID,
+            pending_task_count=sum(not task.completed for task in self.data_service.tasks),
+            pending_question_count=sum(not question.asked for question in self.data_service.questions),
+        )
+
     def _on_board_select(self, board_id: str):
         """选择板块"""
         self.selected_board_id = board_id
@@ -750,7 +760,7 @@ class CmdBoxApp:
 
     def _refresh_tasks(self):
         """刷新任务列表"""
-        tasks = self.data_service.get_sorted_tasks()
+        tasks = self.data_service.tasks
         if self.search_keyword:
             keyword = self.search_keyword.lower()
             tasks = [t for t in tasks if keyword in t.title.lower() or keyword in t.description.lower()]
@@ -773,7 +783,7 @@ class CmdBoxApp:
                 task.update(recurring=recurring)
                 self.data_service.add_task(task)
                 self._refresh_tasks()
-                self._refresh_sidebar()
+                self._refresh_status_counts()
 
         dialog = TaskDialog("新建任务", on_save=on_save)
         self.page.show_dialog(dialog)
@@ -785,7 +795,6 @@ class CmdBoxApp:
                 task.update(title=title, description=description, priority=priority, recurring=recurring)
                 self.data_service.update_task(task)
                 self._refresh_tasks()
-                self._refresh_sidebar()
 
         dialog = TaskDialog("编辑任务", task=task, on_save=on_save)
         self.page.show_dialog(dialog)
@@ -795,7 +804,7 @@ class CmdBoxApp:
         def on_confirm():
             self.data_service.delete_task(task.id)
             self._refresh_tasks()
-            self._refresh_sidebar()
+            self._refresh_status_counts()
 
         dialog = ConfirmDialog(
             "确认删除",
@@ -811,7 +820,7 @@ class CmdBoxApp:
             task.update(in_progress=False)
         self.data_service.update_task(task)
         self._refresh_tasks()
-        self._refresh_sidebar()
+        self._refresh_status_counts()
 
     def _on_toggle_task_in_progress(self, task: Task):
         """切换任务执行中状态"""
@@ -826,7 +835,7 @@ class CmdBoxApp:
         def on_confirm():
             self.data_service.delete_completed_tasks()
             self._refresh_tasks()
-            self._refresh_sidebar()
+            self._refresh_status_counts()
 
         completed_count = len([t for t in self.data_service.tasks if t.completed])
         dialog = ConfirmDialog(
@@ -840,7 +849,7 @@ class CmdBoxApp:
 
     def _refresh_questions(self):
         """刷新问题列表"""
-        questions = self.data_service.get_sorted_questions()
+        questions = self.data_service.questions
         if self.search_keyword:
             keyword = self.search_keyword.lower()
             questions = [q for q in questions if keyword in q.title.lower() or keyword in q.description.lower() or keyword in q.answer.lower()]
@@ -853,7 +862,7 @@ class CmdBoxApp:
                 question = Question.create(title=title, description=description, answer=answer, priority=priority)
                 self.data_service.add_question(question)
                 self._refresh_questions()
-                self._refresh_sidebar()
+                self._refresh_status_counts()
 
         dialog = QuestionDialog("新建问题", on_save=on_save)
         self.page.show_dialog(dialog)
@@ -865,7 +874,6 @@ class CmdBoxApp:
                 question.update(title=title, description=description, answer=answer, priority=priority)
                 self.data_service.update_question(question)
                 self._refresh_questions()
-                self._refresh_sidebar()
 
         dialog = QuestionDialog("编辑问题", question=question, on_save=on_save)
         self.page.show_dialog(dialog)
@@ -875,7 +883,7 @@ class CmdBoxApp:
         def on_confirm():
             self.data_service.delete_question(question.id)
             self._refresh_questions()
-            self._refresh_sidebar()
+            self._refresh_status_counts()
 
         dialog = ConfirmDialog(
             "确认删除",
@@ -889,14 +897,14 @@ class CmdBoxApp:
         question.update(asked=not question.asked)
         self.data_service.update_question(question)
         self._refresh_questions()
-        self._refresh_sidebar()
+        self._refresh_status_counts()
 
     def _on_clear_asked_questions(self):
         """清除所有已询问问题"""
         def on_confirm():
             self.data_service.delete_asked_questions()
             self._refresh_questions()
-            self._refresh_sidebar()
+            self._refresh_status_counts()
 
         asked_count = len([q for q in self.data_service.questions if q.asked])
         dialog = ConfirmDialog(

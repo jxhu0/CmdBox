@@ -41,6 +41,20 @@ class PerformanceTests(unittest.TestCase):
                 refresh([])
                 self.assertFalse(view._card_cache)
 
+    def test_task_and_question_pages_bound_card_cache(self):
+        cases = [(TaskList(*([Mock()] * 5)), Task.create, 'update_tasks'),
+                 (QuestionList(*([Mock()] * 4)), Question.create, 'update_questions')]
+        for view, create, method in cases:
+            items = [create(str(i)) for i in range(100)]
+            with patch.object(type(view), 'update'):
+                getattr(view, method)(items)
+                for _ in range(4):
+                    view._load_more(None)
+                    self.assertLessEqual(len(view._card_cache), 20)
+                self.assertEqual(view._page_start, 80)
+                view._previous_page(None)
+                self.assertEqual(view._page_start, 60)
+
     def test_recurring_reset_saves_once(self):
         app = Mock()
         tasks = [Task.create(str(i)) for i in range(100)]
@@ -67,7 +81,13 @@ class PerformanceTests(unittest.TestCase):
             self.assertIsNot(first, view.controls[0])
             self.assertEqual(len(view.controls), 22)
             view._load_more(None)
-            self.assertEqual(len(view.controls), 42)
+            self.assertEqual(len(view.controls), 23)
+            self.assertEqual(view._page_start, 20)
+            self.assertEqual(len(view._card_cache), 20)
+            for _ in range(8):
+                view._load_more(None)
+            self.assertLessEqual(len(view._card_cache), 20)
+            self.assertLessEqual(len(view.controls), 23)
             view.set_show_move_buttons(False)
             view.update_commands(commands)
             self.assertFalse(view.controls[0].show_move_buttons)
