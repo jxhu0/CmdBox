@@ -82,9 +82,7 @@ class QuestionCard(IsolatedControl, ft.Container):
                 ft.Text(question.asked_at, size=11, color=ft.Colors.GREY_400)
             )
 
-        left_column_controls = [
-            ft.Column(text_controls, spacing=2, expand=True),
-        ]
+        left_column_controls = text_controls
         if bottom_controls:
             left_column_controls.append(ft.Row(bottom_controls, spacing=6))
 
@@ -101,7 +99,8 @@ class QuestionCard(IsolatedControl, ft.Container):
                 ft.Column(
                     left_column_controls,
                     spacing=2,
-                    expand=True
+                    expand=True,
+                    tight=True,
                 ),
             ],
             spacing=6,

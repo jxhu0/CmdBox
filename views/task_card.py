@@ -57,6 +57,7 @@ class TaskCard(IsolatedControl, ft.Container):
                 size=15,
                 weight=ft.FontWeight.W_600,
                 color=ft.Colors.GREY_500 if task.completed else ft.Colors.GREY_800,
+                expand=True,
                 overflow=ft.TextOverflow.ELLIPSIS,
                 max_lines=1
             ),
@@ -68,6 +69,7 @@ class TaskCard(IsolatedControl, ft.Container):
                     "· " + task.description,
                     size=13,
                     color=ft.Colors.GREY_500 if task.completed else ft.Colors.GREY_600,
+                    expand=True,
                     overflow=ft.TextOverflow.ELLIPSIS,
                     max_lines=1
                 )

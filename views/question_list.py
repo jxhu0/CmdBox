@@ -42,6 +42,7 @@ class QuestionList(IsolatedControl, ft.ListView):
         self.sort_mode_index = 0  # 默认按优先级
 
         self.expand = True
+        self.spacing = 8
         self.controls = self._build_empty_state()
 
     def _get_sorted_questions(self) -> List[Question]:
