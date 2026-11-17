@@ -15,6 +15,20 @@ class DialogBody(IsolatedControl, ft.Column):
     pass
 
 
+def _validate_required(dialog, fields):
+    valid = True
+    for field, message in fields:
+        error = None if (field.value or '').strip() else message
+        if isinstance(field, ft.Dropdown):
+            field.error_text = error
+        else:
+            field.error = error
+        valid = valid and error is None
+    if not valid:
+        dialog.update()
+    return valid
+
+
 def _browse_folder(initial_dir: str) -> Optional[str]:
     """跨平台选择文件夹"""
     system = platform.system()
@@ -196,8 +210,10 @@ class BoardDialog(ft.AlertDialog):
             self.page.pop_dialog()
 
     def _on_save(self, e):
+        if not _validate_required(self, [(self.name_field, '请输入板块名称')]):
+            return
         if self.on_save_callback:
-            self.on_save_callback(self.name_field.value, self.selected_icon, self.desc_field.value)
+            self.on_save_callback(self.name_field.value.strip(), self.selected_icon, self.desc_field.value)
         if self.page:
             self.page.pop_dialog()
 
@@ -345,12 +361,18 @@ class CommandDialog(ft.AlertDialog):
             self.page.pop_dialog()
 
     def _on_save(self, e):
+        if not _validate_required(self, [
+            (self.title_field, '请输入标题'),
+            (self.content_field, '请输入指令内容'),
+            (self.board_dropdown, '请选择所属板块'),
+        ]):
+            return
         if self.on_save_callback:
             tags_str = self.tags_field.value or ""
             tags = [t.strip() for t in tags_str.split(",") if t.strip()]
 
             self.on_save_callback(
-                title=self.title_field.value,
+                title=self.title_field.value.strip(),
                 board_id=self.board_dropdown.value,
                 content=self.content_field.value,
                 description=self.description_field.value,
@@ -724,6 +746,8 @@ class TaskDialog(ft.AlertDialog):
 
     def _on_save(self, e):
         title = (self.title_field.value or "").strip()
+        if not _validate_required(self, [(self.title_field, '请输入任务标题')]):
+            return
         description = (self.desc_field.value or "").strip()
         priority = self.priority_dropdown.value or "medium"
         recurring = self.recurring_dropdown.value or ""
@@ -799,6 +823,8 @@ class QuestionDialog(ft.AlertDialog):
 
     def _on_save(self, e):
         title = (self.title_field.value or "").strip()
+        if not _validate_required(self, [(self.title_field, '请输入问题标题')]):
+            return
         description = (self.desc_field.value or "").strip()
         answer = (self.answer_field.value or "").strip()
         priority = self.priority_dropdown.value or "medium"

@@ -24,6 +24,7 @@ class SearchBar(IsolatedControl, ft.Container):
         self.tags = tags
         self.on_search = on_search
         self._search_generation = 0
+        self._context = 'commands'
 
         self.padding = 8
         self.content = self._build_content()
@@ -79,13 +80,23 @@ class SearchBar(IsolatedControl, ft.Container):
             content_padding=ft.padding.symmetric(horizontal=8, vertical=8)
         )
 
+        self.filters = ft.Row([
+            self.board_dropdown,
+            self.tag_dropdown,
+        ], spacing=6)
         return ft.Row([
             self.search_input,
-            ft.Container(width=6),
-            self.board_dropdown,
-            ft.Container(width=6),
-            self.tag_dropdown
-        ], spacing=0)
+            self.filters,
+        ], spacing=6)
+
+    def set_context(self, context: str):
+        self._context = context
+        self.filters.visible = context == 'commands'
+        self.search_input.hint_text = {
+            'tasks': '搜索任务标题、描述...',
+            'questions': '搜索问题、描述或解答...',
+        }.get(context, '搜索指令...')
+        self.update()
 
     def _on_search_change(self, e):
         self._search_generation += 1
@@ -106,6 +117,9 @@ class SearchBar(IsolatedControl, ft.Container):
 
     def _do_search(self):
         keyword = self.search_input.value or ""
+        if self._context != 'commands':
+            self.on_search(keyword, None, None)
+            return
         board_value = self.board_dropdown.value
         tag_value = self.tag_dropdown.value
 

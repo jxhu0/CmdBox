@@ -106,7 +106,7 @@ class QuestionList(IsolatedControl, ft.ListView):
         ]
 
     def _build_question_card(self, question: Question) -> QuestionCard:
-        snapshot = question.to_dict()
+        snapshot = (id(question), question.to_dict())
         cached = self._card_cache.get(question.id)
         if cached and cached[0] == snapshot:
             return cached[1]

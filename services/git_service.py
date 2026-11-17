@@ -1,6 +1,6 @@
 # services/git_service.py
-import os
 import gc
+import json
 from typing import Optional, Tuple
 from pathlib import Path
 from datetime import datetime
@@ -58,7 +58,7 @@ class GitService:
         if not self.is_repo():
             return False
         try:
-            repo = self.git.Repo(self.repo_path)
+            repo = self._get_repo()
             return "origin" in [remote.name for remote in repo.remotes]
         except Exception:
             return False
@@ -66,17 +66,17 @@ class GitService:
     def get_status(self) -> Tuple[bool, str]:
         """获取仓库状态，返回 (有更改, 状态信息)"""
         try:
-            repo = self.git.Repo(self.repo_path)
+            repo = self._get_repo()
             if repo.is_dirty():
                 return True, "有未提交的更改"
             return False, "工作目录干净"
         except Exception as e:
             return False, f"获取状态失败: {e}"
 
-    def commit(self, message: str = "Update data") -> Tuple[bool, str]:
+    def commit(self, message: str = "更新数据") -> Tuple[bool, str]:
         """提交更改"""
         try:
-            repo = self.git.Repo(self.repo_path)
+            repo = self._get_repo()
             repo.git.add(A=True)
             if repo.is_dirty():
                 repo.index.commit(message)
@@ -86,10 +86,10 @@ class GitService:
             return False, f"提交失败: {e}"
 
     def pull(self) -> Tuple[bool, str]:
-        """拉取远程更改，冲突时保留本地版本"""
+        """拉取远程更改；冲突时中止合并，保留两端原始数据。"""
         try:
-            repo = self.git.Repo(self.repo_path)
-            if not repo.remotes:
+            repo = self._get_repo()
+            if not self.has_remote():
                 return True, "没有配置远程仓库"
 
             origin = repo.remotes.origin
@@ -109,33 +109,35 @@ class GitService:
             if remote_branch not in [ref.name for ref in origin.refs]:
                 return True, "远程没有对应分支，跳过拉取"
 
-            # 检查是否有未完成的合并，如果有则先完成它（保留本地版本）
+            # 不自动提交用户尚未处理的合并。
             merge_head_path = Path(repo.git_dir) / "MERGE_HEAD"
             if merge_head_path.exists():
-                try:
-                    self._resolve_conflicts(repo)
-                    repo.git.add(".")
-                    repo.git.commit("-m", "Merge: resolved by keeping local changes")
-                except Exception:
-                    # 如果无法完成合并，则中止
-                    try:
-                        repo.git.merge("--abort")
-                    except Exception:
-                        pass
+                return False, "存在未完成的合并，请先处理后再同步"
 
-            # 拉取远程更改，冲突时保留本地版本（ours）
+            # fetch 已获取远程数据，直接合并，避免重复网络请求。
+            data_file = self.repo_path / 'data.json'
+            had_data_file = data_file.exists()
             try:
-                repo.git.pull("origin", target_branch, "--allow-unrelated-histories",
-                              "--no-rebase", "-X", "ours")
+                repo.git.merge(remote_branch, "--allow-unrelated-histories", "--no-edit",
+                               "--no-commit", "--no-ff")
             except Exception as e:
-                error_msg = str(e)
-                if "CONFLICT" in error_msg.upper() or "Merge conflict" in error_msg:
-                    # 冲突时强制使用本地版本
-                    self._resolve_conflicts(repo)
-                    repo.git.add(".")
-                    repo.git.commit("-m", "Merge: resolved by keeping local changes")
-                    return True, "拉取完成（冲突已保留本地数据）"
-                raise e
+                if merge_head_path.exists():
+                    if not self._merge_initial_data(repo, remote_branch):
+                        repo.git.merge("--abort")
+                        return False, "同步存在合并冲突，已中止合并并保留本地和远程数据，请处理冲突后重试"
+                else:
+                    raise e
+
+            if merge_head_path.exists():
+                # 文本合并成功也可能产生无效 JSON 或重复记录；提交前校验。
+                try:
+                    if had_data_file or data_file.exists():
+                        from services.data_service import DataService
+                        DataService.parse_data(json.loads(data_file.read_text(encoding='utf-8')))
+                    repo.git.commit('-m', '合并远程数据')
+                except Exception as error:
+                    repo.git.merge('--abort')
+                    return False, f'合并数据校验或提交失败，已恢复本地数据: {error}'
 
             return True, "拉取成功"
         except Exception as e:
@@ -144,31 +146,49 @@ class GitService:
                 return True, "远程仓库为空，跳过拉取"
             return False, f"拉取失败: {error_msg}"
 
+    def _merge_initial_data(self, repo, remote_branch) -> bool:
+        """独立初始化的仓库首次同步时，按 ID 合并互不冲突的记录。"""
+        if repo.merge_base('HEAD', remote_branch) or set(repo.index.unmerged_blobs()) != {'data.json'}:
+            return False
+        try:
+            from services.data_service import DataService
+            local = json.loads(repo.git.show(':2:data.json'))
+            remote = json.loads(repo.git.show(':3:data.json'))
+            DataService.parse_data(local)
+            DataService.parse_data(remote)
+            # 全新安装生成的空默认板块不需要带入已有的远程数据。
+            default_boards = [('Commands', '💻'), ('Prompts', '🤖')]
+            if (all(not local.get(name) for name in ('commands', 'tasks', 'questions'))
+                    and [(b['name'], b.get('icon', '📁')) for b in local.get('boards', [])] == default_boards
+                    and all(not b.get('description') for b in local.get('boards', []))):
+                merged = remote
+            else:
+                merged = dict(remote)
+                for name in ('boards', 'commands', 'tasks', 'questions'):
+                    records = {row['id']: row for row in remote.get(name, [])}
+                    for row in local.get(name, []):
+                        if row['id'] in records and records[row['id']] != row:
+                            return False
+                        records[row['id']] = row
+                    merged[name] = list(records.values())
+            (self.repo_path / 'data.json').write_text(
+                json.dumps(merged, ensure_ascii=False, indent=2), encoding='utf-8')
+            repo.git.add('data.json')
+            return True
+        except Exception:
+            return False
+
     def push(self) -> Tuple[bool, str]:
         """推送到远程"""
         try:
-            repo = self.git.Repo(self.repo_path)
-            if not repo.remotes:
+            repo = self._get_repo()
+            if not self.has_remote():
                 return True, "没有配置远程仓库"
 
-            origin = repo.remotes.origin
             target_branch = "main"
 
-            # 如果本地是 master 分支，创建一个新的 main 分支并切换
-            current_branch = repo.active_branch.name
-            if current_branch != target_branch:
-                try:
-                    # 检查本地是否已有 main 分支
-                    if target_branch not in [b.name for b in repo.branches]:
-                        # 创建 main 分支
-                        repo.create_head(target_branch)
-                    # 切换到 main 分支
-                    repo.git.checkout(target_branch)
-                except Exception as e:
-                    return False, f"切换分支失败: {e}"
-
-            # 直接使用 git push 命令，确保设置上游分支
-            repo.git.push("--set-upstream", "origin", target_branch)
+            # 推送当前已合并的数据，不切换到可能过期的本地 main 分支。
+            repo.git.push("--set-upstream", "origin", f"HEAD:{target_branch}")
 
             return True, "推送成功"
         except Exception as e:
@@ -180,7 +200,7 @@ class GitService:
         if not self.is_repo():
             return None
         try:
-            repo = self.git.Repo(self.repo_path)
+            repo = self._get_repo()
             if "origin" in [remote.name for remote in repo.remotes]:
                 return repo.remotes.origin.url
             return None
@@ -190,7 +210,7 @@ class GitService:
     def set_remote_url(self, url: str) -> Tuple[bool, str]:
         """设置 origin 地址；空地址移除 origin，保留其他远程仓库。"""
         try:
-            repo = self.git.Repo(self.repo_path)
+            repo = self._get_repo()
             url = (url or "").strip()
             has_origin = "origin" in [r.name for r in repo.remotes]
             if not url:
@@ -205,103 +225,38 @@ class GitService:
         except Exception as e:
             return False, f"设置失败: {e}"
 
-    def _resolve_conflicts(self, repo):
-        """解决合并冲突：保留本地版本，远端独有的文件接受远端版本"""
-        # checkout --ours 会对本地不存在的文件报错，需要逐个处理
-        try:
-            # 获取所有冲突文件
-            conflicts = repo.index.unmerged_blobs()
-            for filepath in conflicts:
-                try:
-                    repo.git.checkout("--ours", "--", filepath)
-                except Exception:
-                    # 本地不存在的文件（如远端新增的备份），接受远端版本
-                    try:
-                        repo.git.checkout("--theirs", "--", filepath)
-                    except Exception:
-                        pass
-        except Exception:
-            # 如果逐个处理也失败，尝试整体 checkout --ours（忽略错误）
-            try:
-                repo.git.checkout("--ours", ".")
-            except Exception:
-                pass
-
-    def _is_first_sync(self) -> bool:
-        """判断是否为首次同步（本地从未从远程拉取过数据）"""
-        try:
-            repo = self.git.Repo(self.repo_path)
-            if not repo.remotes:
-                return False
-            # 检查是否有远程跟踪分支，没有则说明从未同步过
-            origin = repo.remotes.origin
-            try:
-                origin.fetch()
-            except Exception:
-                return False
-            remote_branch = "origin/main"
-            if remote_branch not in [ref.name for ref in origin.refs]:
-                return False
-            # 本地有 main 分支但从未 merge 过远程 → 首次同步
-            local_commits = set(c.hexsha for c in repo.iter_commits("main"))
-            remote_commits = set(c.hexsha for c in repo.iter_commits("origin/main"))
-            # 如果本地和远程没有共同祖先，说明是首次同步
-            return not local_commits.intersection(remote_commits)
-        except Exception:
-            return False
-
-    def _pull_first_sync(self) -> Tuple[bool, str]:
-        """首次同步拉取：优先使用远程版本"""
-        try:
-            repo = self.git.Repo(self.repo_path)
-            origin = repo.remotes.origin
-            target_branch = "main"
-
-            try:
-                repo.git.pull("origin", target_branch, "--allow-unrelated-histories",
-                              "--no-rebase", "-X", "theirs")
-            except Exception as e:
-                error_msg = str(e)
-                if "CONFLICT" in error_msg.upper() or "Merge conflict" in error_msg:
-                    # 首次同步冲突时保留远程版本
-                    try:
-                        repo.git.checkout("--theirs", ".")
-                    except Exception:
-                        pass
-                    repo.git.add(".")
-                    repo.git.commit("-m", "Merge: first sync, prefer remote data")
-                    return True, "首次同步拉取完成（冲突已使用远程数据）"
-                raise e
-
-            return True, "首次同步拉取成功"
-        except Exception as e:
-            return False, f"首次同步拉取失败: {e}"
-
     def sync(self, data_service=None) -> Tuple[bool, str]:
-        """同步：备份 -> [首次: 先pull远程] -> 提交 -> 拉取 -> 推送"""
+        """同步：保存并备份 -> 提交 -> 拉取 -> 重载 -> 推送。"""
+        if not self.has_remote():
+            return False, "未配置远程仓库"
+        repo = self._get_repo()
+        if (Path(repo.git_dir) / "MERGE_HEAD").exists():
+            return False, "存在未完成的合并，请先处理后再同步"
         # 同步前先创建备份
         if data_service:
             try:
-                backup_path = data_service.backup()
-                print(f"已创建备份: {backup_path}")
+                data_service.save()
+                data_service.flush()
+                data_service.backup()
             except Exception as e:
-                print(f"备份失败: {e}")
-
-        # 首次同步：先拉取远程数据（优先远程版本）
-        if self.has_remote() and self._is_first_sync():
-            success, msg = self._pull_first_sync()
-            if not success:
-                return False, msg
+                return False, f"同步前保存或备份失败: {e}"
 
         # 提交本地更改
-        success, msg = self.commit(f"Sync at {datetime.now().isoformat()}")
-        if not success and "没有更改" not in msg:
+        success, msg = self.commit(f"同步数据 {datetime.now().isoformat()}")
+        if not success:
             return False, msg
 
         # 拉取远程更改
         success, msg = self.pull()
         if not success:
             return False, msg
+
+        # 拉取后立即更新内存；即使推送失败，后续编辑也基于已拉取的数据。
+        if data_service:
+            try:
+                data_service.load()
+            except Exception as e:
+                return False, f"同步后加载数据失败: {e}"
 
         # 推送
         success, msg = self.push()

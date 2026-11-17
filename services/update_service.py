@@ -1,5 +1,6 @@
 # services/update_service.py
 import requests
+import re
 from typing import Optional, Tuple
 
 GITHUB_REPO = "jxhu0/CmdBox"
@@ -8,6 +9,17 @@ API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
 class UpdateService:
     """检查更新的服务"""
+
+    @staticmethod
+    def is_newer_version(candidate: str, current: str) -> bool:
+        """按数字比较发布版本；忽略未知格式和预发布版本。"""
+        def parse(version):
+            match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)(?:\+[0-9A-Za-z.-]+)?", version or "")
+            return tuple(map(int, match.groups())) if match else None
+
+        candidate_parts, current_parts = parse(candidate), parse(current)
+        return (candidate_parts is not None and current_parts is not None
+                and candidate_parts > current_parts)
 
     @staticmethod
     def check_for_updates(current_version: str) -> Tuple[bool, Optional[str], Optional[str]]:
@@ -31,11 +43,8 @@ class UpdateService:
             latest_version = data.get("tag_name", "")
             release_notes = data.get("body", "")
 
-            # 去除 tag_name 的 'v' 前缀进行比较
-            latest_ver = latest_version.lstrip("v")
-            current_ver = current_version.lstrip("v")
-
-            if latest_ver != current_ver:
+            if (not data.get('draft') and not data.get('prerelease')
+                    and UpdateService.is_newer_version(latest_version, current_version)):
                 return True, latest_version, release_notes
             return False, latest_version, release_notes
         except Exception:

@@ -2,12 +2,42 @@ import json
 import tempfile
 import threading
 import unittest
+from datetime import datetime
+from pathlib import Path
 from unittest.mock import patch
 from services.data_service import DataService
 from models.command import Command
 
 
 class PersistenceTests(unittest.TestCase):
+    def test_invalid_reload_does_not_partially_replace_models(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service = DataService(directory)
+            service.load()
+            original_boards = service.boards
+            data = json.loads(service.data_file.read_text())
+            data['boards'][0]['name'] = '外部修改'
+            data['tasks'] = [{}]
+            service.data_file.write_text(json.dumps(data))
+            with self.assertRaises(KeyError):
+                service.load()
+            self.assertIs(service.boards, original_boards)
+            self.assertEqual(service.boards[0].name, 'Commands')
+
+    def test_multiple_backups_in_same_second_preserve_both_snapshots(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service = DataService(directory)
+            service.save()
+            with patch('services.data_service.datetime') as clock:
+                clock.now.side_effect = [datetime(2026, 11, 17, microsecond=1),
+                                         datetime(2026, 11, 17, microsecond=2)]
+                first = service.backup()
+                service.add_command(Command.create('board', 'new', 'echo new'))
+                second = service.backup()
+            self.assertNotEqual(first, second)
+            self.assertEqual(len(json.loads(Path(first).read_text())['commands']), 0)
+            self.assertEqual(len(json.loads(Path(second).read_text())['commands']), 1)
+
     def test_unchanged_records_reuse_snapshots_and_later_edits_persist(self):
         with tempfile.TemporaryDirectory() as directory:
             service = DataService(directory)

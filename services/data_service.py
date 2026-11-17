@@ -133,10 +133,27 @@ class DataService:
                 self._init_default_data()
                 return
 
-        self.boards = [Board.from_dict(b) for b in data.get("boards", [])]
-        self.commands = [Command.from_dict(c) for c in data.get("commands", [])]
-        self.tasks = [Task.from_dict(t) for t in data.get("tasks", [])]
-        self.questions = [Question.from_dict(q) for q in data.get("questions", [])]
+        # 完整解析后再替换，避免某类数据加载失败造成内存处于半更新状态。
+        records = self.parse_data(data)
+        for name, items in records.items():
+            setattr(self, name, items)
+        self._snapshot_cache = {name: {} for name in self._snapshot_cache}
+
+    @staticmethod
+    def parse_data(data):
+        """解析数据但不写入；同步时也用它检查合并结果。"""
+        if not isinstance(data, dict):
+            raise ValueError('数据必须是 JSON 对象')
+        records = {}
+        for name, model in [('boards', Board), ('commands', Command), ('tasks', Task), ('questions', Question)]:
+            rows = data.get(name, [])
+            if not isinstance(rows, list):
+                raise ValueError(f'{name} 必须是列表')
+            records[name] = [model.from_dict(row) for row in rows]
+            ids = [item.id for item in records[name]]
+            if len(ids) != len(set(ids)):
+                raise ValueError(f'{name} 包含重复 ID')
+        return records
 
     def save(self):
         """保存数据到文件"""
@@ -174,7 +191,7 @@ class DataService:
         self.backup_dir.mkdir(parents=True, exist_ok=True)
 
         # 生成带时间戳的备份文件名
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
         backup_file = self.backup_dir / f"data_{timestamp}.json"
 
         # 复制当前数据文件到备份目录

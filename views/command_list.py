@@ -72,7 +72,7 @@ class CommandList(IsolatedControl, ft.ListView):
             board = self.boards.get(cmd.board_id)
             if not board:
                 continue
-            signature = (repr(cmd.to_dict()), self.show_move_buttons)
+            signature = (id(cmd), repr(cmd.to_dict()), id(board), repr(board.to_dict()), self.show_move_buttons)
             cached = self._card_cache.get(cmd.id)
             if cached and cached[0] == signature:
                 cards.append(cached[1])
@@ -114,7 +114,7 @@ class CommandList(IsolatedControl, ft.ListView):
             self._query_ids = ids
         self.commands = commands
         signature = (ids, self._visible_limit, self._page_start, self.show_move_buttons,
-                     [cmd.to_dict()
+                     [(id(cmd), cmd.to_dict(), id(self.boards[cmd.board_id]), self.boards[cmd.board_id].to_dict())
                       for cmd in commands[self._page_start:self._page_start + self._visible_limit] if cmd.board_id in self.boards])
         if signature == self._render_signature:
             return

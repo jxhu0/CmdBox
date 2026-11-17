@@ -235,7 +235,7 @@ class CmdBoxApp:
                 # 去掉 v 前缀比较
                 cached_ver = cached.lstrip("v")
                 current_ver = __version__.lstrip("v")
-                if current_ver > cached_ver:
+                if UpdateService.is_newer_version(current_ver, cached_ver):
                     self.config_service.clear_latest_version_cache()
 
             # 总是检测最新版本并保存到配置
@@ -453,16 +453,13 @@ class CmdBoxApp:
         self._command_views[self.selected_board_id] = view
         self.command_list = view
         view.boards = {board.id: board for board in self.data_service.boards}
+        commands = self.data_service.search_commands(
+            self.search_keyword, self.search_board_ids, self.search_tag
+        )
         if self.show_favorites_only:
-            # 收藏板块：显示所有收藏指令，隐藏移动按钮
-            commands = self.data_service.get_favorite_commands()
+            commands = [command for command in commands if command.is_favorite]
             self.command_list.set_show_move_buttons(False)
         else:
-            commands = self.data_service.search_commands(
-                self.search_keyword,
-                self.search_board_ids,
-                self.search_tag
-            )
             self.command_list.set_show_move_buttons(True)
         view.update_commands(commands, update=not is_new)
         if old_view is not view:
@@ -514,6 +511,10 @@ class CmdBoxApp:
         self.search_bar.reset_filters(board_id if board_id not in (
             self.FAVORITES_BOARD_ID, self.TASKS_BOARD_ID, self.QUESTIONS_BOARD_ID
         ) else None)
+        self.search_bar.set_context(
+            'tasks' if board_id == self.TASKS_BOARD_ID else
+            'questions' if board_id == self.QUESTIONS_BOARD_ID else 'commands'
+        )
         if board_id == self.FAVORITES_BOARD_ID:
             # 收藏板块
             self.show_favorites_only = True
@@ -539,6 +540,8 @@ class CmdBoxApp:
 
     def _on_search(self, keyword: str, board_ids: Optional[List[str]], tag: Optional[str] = None):
         """搜索"""
+        if getattr(self, '_syncing', False):
+            return
         self.search_keyword = keyword
         self.search_board_ids = board_ids
         self.search_tag = tag
@@ -954,23 +957,19 @@ class CmdBoxApp:
         )
         self.page.show_dialog(dialog)
 
-    def _on_sync(self, e):
+    async def _on_sync(self, e):
         """同步"""
-        if getattr(self, '_syncing', False):
+        import asyncio
+        if getattr(self, '_syncing', False) or getattr(self, '_closing', False):
             return
         self._syncing = True
         edit_controls = [self.sidebar, self.command_stack, self.task_list,
-                         self.question_list, self.add_btn]
+                         self.question_list, self.add_btn, self.search_bar]
         for control in edit_controls:
             control.disabled = True
         self.page.update(*edit_controls)
         syncing_snack = None
         try:
-            # 先保存当前数据
-            self.data_service.save()
-
-            self.data_service.flush()
-
             # 检查是否有远程仓库
             if not self.git_service.has_remote():
                 self._show_snack_bar("未配置远程仓库，请在设置中配置 Git 远程地址", 6000)
@@ -989,7 +988,15 @@ class CmdBoxApp:
             self.page.update()
 
             # 执行同步
-            success, msg = self.git_service.sync(self.data_service)
+            success, msg = await asyncio.to_thread(self.git_service.sync, self.data_service)
+            # 即使推送失败，拉取也可能已经成功，必须刷新当前界面。
+            self._reset_recurring_tasks()
+            self._refresh_sidebar()
+            selected = self.selected_board_id
+            if (selected not in (self.FAVORITES_BOARD_ID, self.TASKS_BOARD_ID, self.QUESTIONS_BOARD_ID)
+                    and not self.data_service.get_board(selected)):
+                selected = self.FAVORITES_BOARD_ID
+            self._on_board_select(selected)
 
             # 关闭同步中提示
             syncing_snack.open = False
@@ -999,7 +1006,7 @@ class CmdBoxApp:
 
             if success:
                 self.config_service.update_last_sync()
-                self._show_snack_bar("同步成功，重启应用后生效")
+                self._show_snack_bar("同步成功，数据已更新")
             else:
                 self._show_snack_bar(msg, 8000)
         except Exception as ex:

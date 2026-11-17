@@ -114,7 +114,7 @@ class TaskList(IsolatedControl, ft.ListView):
         ]
 
     def _build_task_card(self, task: Task) -> TaskCard:
-        snapshot = task.to_dict()
+        snapshot = (id(task), task.to_dict())
         cached = self._card_cache.get(task.id)
         if cached and cached[0] == snapshot:
             return cached[1]
