@@ -34,6 +34,9 @@ class CmdBoxApp:
 
     def __init__(self, page: ft.Page):
         self.page = page
+        self._closing = False
+        self._recurring_check_task = None
+        self._last_recurring_check_date = None
         self._setup_page()
 
         # 服务
@@ -92,20 +95,29 @@ class CmdBoxApp:
         self.page.theme = ft.Theme(font_family=font_family)
 
     async def _on_window_event(self, event):
+        if event.type in (ft.WindowEventType.FOCUS, ft.WindowEventType.RESTORE):
+            self._check_recurring_tasks(force=True)
+            return
         if event.type != ft.WindowEventType.CLOSE:
+            return
+        if self._closing:
             return
         if getattr(self, '_syncing', False):
             self._show_snack_bar('请等待同步完成后退出')
             return
         import asyncio
+        self._closing = True
         try:
             if self.data_service:
                 await asyncio.to_thread(self.data_service.close)
         except OSError as error:
+            self._closing = False
             self._show_snack_bar(str(error), 10000)
             return
         if self.git_service:
             await asyncio.to_thread(self.git_service.cleanup)
+        if self._recurring_check_task:
+            self._recurring_check_task.cancel()
         await self.page.window.destroy()
 
     def _show_setup_wizard(self):
@@ -149,13 +161,18 @@ class CmdBoxApp:
         # 构建界面
         self._build_ui()
 
+        # 保持运行时跨天也能重置任务；窗口重新激活时另做即时检查。
+        if self._recurring_check_task:
+            self._recurring_check_task.cancel()
+        self._recurring_check_task = self.page.run_task(self._watch_recurring_tasks)
+
         # 异步检查更新（不阻塞 UI）
         self._check_for_updates()
 
-    def _reset_recurring_tasks(self):
+    def _reset_recurring_tasks(self, today=None):
         """重置过期的周期性任务"""
         _BJ_TZ = timezone(timedelta(hours=8))
-        now = datetime.now(_BJ_TZ).date()
+        now = today or datetime.now(_BJ_TZ).date()
         changed = False
         for task in self.data_service.tasks:
             if not task.completed or not task.recurring or not task.completed_at:
@@ -178,6 +195,29 @@ class CmdBoxApp:
                 changed = True
         if changed:
             self.data_service.save()
+        self._last_recurring_check_date = now
+        return changed
+
+    def _check_recurring_tasks(self, force=False):
+        """跨天或激活窗口时检查；同步和关闭期间不修改数据。"""
+        if (not getattr(self, 'data_service', None)
+                or not hasattr(self, 'sidebar')
+                or getattr(self, '_closing', False)
+                or getattr(self, '_syncing', False)):
+            return
+        today = datetime.now(timezone(timedelta(hours=8))).date()
+        if not force and today == self._last_recurring_check_date:
+            return
+        if self._reset_recurring_tasks(today):
+            if self.selected_board_id == self.TASKS_BOARD_ID:
+                self._refresh_tasks()
+            self._refresh_sidebar()
+
+    async def _watch_recurring_tasks(self):
+        import asyncio
+        while True:
+            await asyncio.sleep(60)
+            self._check_recurring_tasks()
 
     def _on_save_error(self, error):
         async def notify():
@@ -983,12 +1023,16 @@ class CmdBoxApp:
             return
         import subprocess
         import asyncio
+        self._closing = True
         try:
             await asyncio.to_thread(self.data_service.flush)
+            subprocess.Popen([sys.executable] + sys.argv)
         except OSError as error:
+            self._closing = False
             self._show_snack_bar(str(error), 10000)
             return
-        subprocess.Popen([sys.executable] + sys.argv)
+        if self._recurring_check_task:
+            self._recurring_check_task.cancel()
         await self.page.window.destroy()
         os._exit(0)
 
@@ -1099,14 +1143,11 @@ set thePath to POSIX path of (choose file name default name "{filename}" with pr
         current_remote_url = self.git_service.get_remote_url() or ""
 
         def on_save(remote_url: str):
-            if remote_url:
-                success, msg = self.git_service.set_remote_url(remote_url)
-                if success:
-                    self._show_snack_bar(msg)
-                else:
-                    self._show_snack_bar(f"设置失败: {msg}")
+            success, msg = self.git_service.set_remote_url(remote_url)
+            if success:
+                self._show_snack_bar(msg)
             else:
-                self._show_snack_bar("远程地址已清除")
+                self._show_snack_bar(f"设置失败: {msg}")
 
         def on_restore(backup_path: str):
             """从备份恢复数据"""

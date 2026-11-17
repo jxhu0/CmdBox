@@ -60,25 +60,35 @@ class QuestionList(IsolatedControl, ft.ListView):
         return questions
 
     def _build_sort_bar(self) -> ft.Control:
-        """构建排序切换栏"""
+        """直接选择排序方式，并标记当前选项。"""
         _, icon, tooltip = SORT_MODES[self.sort_mode_index]
         return ft.Container(
             content=ft.Row([
                 ft.Container(expand=True),
-                ft.IconButton(
-                    icon=icon,
-                    icon_size=16,
-                    icon_color=ft.Colors.GREY_500,
-                    tooltip=tooltip,
-                    on_click=self._cycle_sort_mode,
-                    style=ft.ButtonStyle(padding=4),
+                ft.PopupMenuButton(
+                    content=ft.Row([
+                        ft.Icon(icon, size=16, color=ft.Colors.GREY_500),
+                        ft.Text(tooltip, size=12, color=ft.Colors.GREY_700),
+                        ft.Icon(ft.Icons.ARROW_DROP_DOWN, size=16),
+                    ], spacing=4, tight=True),
+                    tooltip="选择排序方式",
+                    items=[
+                        ft.PopupMenuItem(
+                            content=label,
+                            checked=index == self.sort_mode_index,
+                            on_click=lambda e, index=index: self._select_sort_mode(index),
+                        )
+                        for index, (_, _, label) in enumerate(SORT_MODES)
+                    ],
                 ),
             ], spacing=0, tight=True),
             padding=ft.padding.only(right=4, top=2),
         )
 
-    def _cycle_sort_mode(self, e):
-        self.sort_mode_index = (self.sort_mode_index + 1) % len(SORT_MODES)
+    def _select_sort_mode(self, index):
+        if index == self.sort_mode_index:
+            return
+        self.sort_mode_index = index
         self.controls = self._build_question_cards()
         self.update()
 

@@ -59,7 +59,7 @@ class GitService:
             return False
         try:
             repo = self.git.Repo(self.repo_path)
-            return len(repo.remotes) > 0
+            return "origin" in [remote.name for remote in repo.remotes]
         except Exception:
             return False
 
@@ -181,24 +181,26 @@ class GitService:
             return None
         try:
             repo = self.git.Repo(self.repo_path)
-            if repo.remotes:
+            if "origin" in [remote.name for remote in repo.remotes]:
                 return repo.remotes.origin.url
             return None
         except Exception:
             return None
 
     def set_remote_url(self, url: str) -> Tuple[bool, str]:
-        """设置远程仓库地址"""
+        """设置 origin 地址；空地址移除 origin，保留其他远程仓库。"""
         try:
             repo = self.git.Repo(self.repo_path)
-
-            # 移除现有的 origin 远程（如果存在）
-            if "origin" in [r.name for r in repo.remotes]:
-                repo.delete_remote(repo.remotes.origin)
-
-            # 添加新的远程仓库
-            repo.create_remote("origin", url)
-
+            url = (url or "").strip()
+            has_origin = "origin" in [r.name for r in repo.remotes]
+            if not url:
+                if has_origin:
+                    repo.delete_remote(repo.remotes.origin)
+                return True, "远程地址已清除"
+            if has_origin:
+                repo.remotes.origin.set_url(url)
+            else:
+                repo.create_remote("origin", url)
             return True, "设置成功"
         except Exception as e:
             return False, f"设置失败: {e}"
