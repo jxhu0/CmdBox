@@ -1,5 +1,5 @@
 # app.py
-__version__ = "1.4.1"
+__version__ = "1.4.2"
 
 import os
 import sys
