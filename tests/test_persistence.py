@@ -15,10 +15,10 @@ class PersistenceTests(unittest.TestCase):
             service = DataService(directory)
             service.load()
             original_boards = service.boards
-            data = json.loads(service.data_file.read_text())
+            data = json.loads(service.data_file.read_text(encoding='utf-8'))
             data['boards'][0]['name'] = '外部修改'
             data['tasks'] = [{}]
-            service.data_file.write_text(json.dumps(data))
+            service.data_file.write_text(json.dumps(data), encoding='utf-8')
             with self.assertRaises(KeyError):
                 service.load()
             self.assertIs(service.boards, original_boards)
@@ -35,8 +35,8 @@ class PersistenceTests(unittest.TestCase):
                 service.add_command(Command.create('board', 'new', 'echo new'))
                 second = service.backup()
             self.assertNotEqual(first, second)
-            self.assertEqual(len(json.loads(Path(first).read_text())['commands']), 0)
-            self.assertEqual(len(json.loads(Path(second).read_text())['commands']), 1)
+            self.assertEqual(len(json.loads(Path(first).read_text(encoding='utf-8'))['commands']), 0)
+            self.assertEqual(len(json.loads(Path(second).read_text(encoding='utf-8'))['commands']), 1)
 
     def test_unchanged_records_reuse_snapshots_and_later_edits_persist(self):
         with tempfile.TemporaryDirectory() as directory:

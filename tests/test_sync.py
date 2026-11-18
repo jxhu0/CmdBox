@@ -42,6 +42,7 @@ class SyncTests(unittest.TestCase):
         with repo.config_writer() as config:
             config.set_value('user', 'name', '测试用户')
             config.set_value('user', 'email', 'test@example.invalid')
+            config.set_value('core', 'autocrlf', False)
 
     def publish_command(self):
         other_data = DataService(self.other.working_tree_dir)
@@ -62,7 +63,7 @@ class SyncTests(unittest.TestCase):
         self.assertEqual(self.data.commands[0].id, command.id)
         self.data.add_task(Task.create('同步后继续编辑'))
         self.data.flush()
-        saved = json.loads(self.data.data_file.read_text())
+        saved = json.loads(self.data.data_file.read_text(encoding='utf-8'))
         self.assertEqual(saved['commands'][0]['id'], command.id)
         self.assertEqual(len(saved['tasks']), 1)
         self.assertEqual(self.remote.commit('main').hexsha, self.local.head.commit.hexsha)
@@ -72,7 +73,7 @@ class SyncTests(unittest.TestCase):
         with patch.object(self.git, 'push', return_value=(False, '推送失败')):
             self.assertEqual(self.git.sync(self.data), (False, '推送失败'))
         self.data.add_task(Task.create('继续编辑'))
-        self.assertEqual(json.loads(self.data.data_file.read_text())['commands'][0]['id'], command.id)
+        self.assertEqual(json.loads(self.data.data_file.read_text(encoding='utf-8'))['commands'][0]['id'], command.id)
 
     def test_conflict_aborts_without_overwriting_either_side(self):
         self.publish_command()
@@ -94,7 +95,7 @@ class SyncTests(unittest.TestCase):
         duplicate = Task.create('重复记录').to_dict()
         for invalid in ['{"commands": [invalid]}', json.dumps({'tasks': [duplicate, duplicate]})]:
             with self.subTest(data=invalid):
-                (Path(self.other.working_tree_dir) / 'data.json').write_text(invalid)
+                (Path(self.other.working_tree_dir) / 'data.json').write_text(invalid, encoding='utf-8')
                 self.other.git.add('data.json')
                 self.other.index.commit('损坏的数据')
                 self.other.git.push('origin', 'main')
