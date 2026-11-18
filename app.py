@@ -118,7 +118,18 @@ class CmdBoxApp:
             await asyncio.to_thread(self.git_service.cleanup)
         if self._recurring_check_task:
             self._recurring_check_task.cancel()
-        await self.page.window.destroy()
+        await self._close_window()
+
+    async def _close_window(self):
+        """保存、清理完成后退出，避开旧版 Flet 在 Windows 的 destroy 延迟。"""
+        if sys.platform == 'win32':
+            # 与 Flet 上游修复一致：https://github.com/flet-dev/flet/pull/6428
+            # 先将解除关闭拦截的补丁发送到客户端，再请求正常关闭。
+            self.page.window.prevent_close = False
+            self.page.update()
+            await self.page.window.close()
+        else:
+            await self.page.window.destroy()
 
     def _show_setup_wizard(self):
         """显示设置向导"""
@@ -1040,7 +1051,7 @@ class CmdBoxApp:
             return
         if self._recurring_check_task:
             self._recurring_check_task.cancel()
-        await self.page.window.destroy()
+        await self._close_window()
         os._exit(0)
 
     def _on_export_click(self, e):
