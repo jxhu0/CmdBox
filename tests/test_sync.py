@@ -34,9 +34,12 @@ class SyncTests(unittest.TestCase):
         self.local.index.commit('初始化数据')
         self.local.create_remote('origin', str(root / 'remote.git'))
         self.local.git.push('--set-upstream', 'origin', 'main')
-        self.other = Repo.clone_from(str(root / 'remote.git'), root / 'other', branch='main')
+        # 在首次检出前配置换行，避免 Windows 全局 autocrlf=true 先写入 CRLF，
+        # 随后改为 false 又把干净的测试仓库标记成有本地修改。
+        self.other = Repo.clone_from(str(root / 'remote.git'), root / 'other', branch='main', no_checkout=True)
         self.configure(self.other)
         self.addCleanup(self.other.close)
+        self.other.git.reset('--hard', 'HEAD')
         self.git = GitService(str(root / 'local'))
         self.addCleanup(self.git.cleanup)
 
