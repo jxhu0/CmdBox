@@ -103,7 +103,7 @@ class CmdBoxApp:
         if self._closing:
             return
         if getattr(self, '_syncing', False):
-            self._show_snack_bar('请等待同步完成后退出')
+            self._show_snack_bar('请等待上传或拉取完成后退出')
             return
         import asyncio
         self._closing = True
@@ -152,7 +152,7 @@ class CmdBoxApp:
         self.data_service.enable_background_saves(self._on_save_error)
 
         # 初始提交
-        self.git_service.commit("Initial commit")
+        self.git_service.commit("初始化数据")
 
         self._init_app()
 
@@ -304,37 +304,41 @@ class CmdBoxApp:
             )
         )
 
+        self.upload_btn = ft.TextButton(
+            "上传数据",
+            icon=ft.Icons.CLOUD_UPLOAD_OUTLINED,
+            tooltip="将本地改动上传到远程仓库",
+            on_click=self._on_upload_data
+        )
+        self.pull_btn = ft.TextButton(
+            "拉取数据",
+            icon=ft.Icons.CLOUD_DOWNLOAD_OUTLINED,
+            tooltip="将远程改动拉取到本地",
+            on_click=self._on_pull_data
+        )
         self.header = ft.Container(
-            content=ft.Row([
-                self.logo,
-                ft.Container(content=self.search_bar, expand=True, padding=ft.padding.only(left=10, right=10)),
+            content=ft.Column([
                 ft.Row([
-                    ft.IconButton(
-                        icon=ft.Icons.DOWNLOAD,
-                        icon_size=20,
-                        tooltip="导出指令",
-                        on_click=self._on_export_click
-                    ),
-                    ft.IconButton(
-                        icon=ft.Icons.SYNC,
-                        icon_size=20,
-                        tooltip="同步",
-                        on_click=self._on_sync
-                    ),
-                    ft.IconButton(
-                        icon=ft.Icons.POWER_SETTINGS_NEW,
-                        icon_size=20,
-                        tooltip="重启应用",
-                        on_click=self._on_restart
-                    ),
-                    ft.IconButton(
-                        icon=ft.Icons.SETTINGS_OUTLINED,
-                        icon_size=20,
-                        tooltip="设置",
-                        on_click=self._on_settings
-                    )
-                ], spacing=0)
-            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, tight=False),
+                    self.logo,
+                    ft.Row([
+                        ft.IconButton(
+                            icon=ft.Icons.DOWNLOAD,
+                            icon_size=20,
+                            tooltip="导出指令",
+                            on_click=self._on_export_click
+                        ),
+                        self.upload_btn,
+                        self.pull_btn,
+                        ft.IconButton(
+                            icon=ft.Icons.SETTINGS_OUTLINED,
+                            icon_size=20,
+                            tooltip="设置",
+                            on_click=self._on_settings
+                        )
+                    ], spacing=0)
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                self.search_bar,
+            ], spacing=4, tight=True),
             padding=ft.padding.symmetric(horizontal=12, vertical=8),
             bgcolor=ft.Colors.WHITE,
             border=ft.border.only(bottom=ft.border.BorderSide(1, ft.Colors.GREY_200))
@@ -599,7 +603,11 @@ class CmdBoxApp:
 
     def _on_edit_board_desc(self, board: Board):
         """编辑板块描述（从描述卡片）"""
+        if getattr(self, '_syncing', False):
+            return
         def on_save(name: str, icon: str, description: str = ""):
+            if getattr(self, '_syncing', False):
+                return
             if name:
                 board.update(name=name, icon=icon, description=description)
                 self.data_service.update_board(board)
@@ -968,29 +976,36 @@ class CmdBoxApp:
         )
         self.page.show_dialog(dialog)
 
-    async def _on_sync(self, e):
-        """同步"""
+    async def _on_upload_data(self, e):
+        await self._run_data_transfer(upload=True)
+
+    async def _on_pull_data(self, e):
+        await self._run_data_transfer(upload=False)
+
+    async def _run_data_transfer(self, upload: bool):
+        """上传与拉取独立执行，并共享忙碌状态和错误处理。"""
         import asyncio
         if getattr(self, '_syncing', False) or getattr(self, '_closing', False):
             return
         self._syncing = True
         edit_controls = [self.sidebar, self.command_stack, self.task_list,
-                         self.question_list, self.add_btn, self.search_bar]
+                         self.question_list, self.add_btn, self.search_bar,
+                         self.board_desc_container, self.upload_btn, self.pull_btn]
         for control in edit_controls:
             control.disabled = True
         self.page.update(*edit_controls)
         syncing_snack = None
+        action = "上传" if upload else "拉取"
         try:
             # 检查是否有远程仓库
             if not self.git_service.has_remote():
                 self._show_snack_bar("未配置远程仓库，请在设置中配置 Git 远程地址", 6000)
                 return
 
-            # 显示同步中提示
             syncing_snack = ft.SnackBar(
                 content=ft.Row([
                     ft.ProgressRing(width=16, height=16, stroke_width=2, color=ft.Colors.WHITE),
-                    ft.Text("正在同步...", size=14)
+                    ft.Text(f"正在{action}数据...", size=14)
                 ], spacing=10),
                 duration=60000
             )
@@ -998,16 +1013,21 @@ class CmdBoxApp:
             syncing_snack.open = True
             self.page.update()
 
-            # 执行同步
-            success, msg = await asyncio.to_thread(self.git_service.sync, self.data_service)
-            # 即使推送失败，拉取也可能已经成功，必须刷新当前界面。
-            self._reset_recurring_tasks()
-            self._refresh_sidebar()
-            selected = self.selected_board_id
-            if (selected not in (self.FAVORITES_BOARD_ID, self.TASKS_BOARD_ID, self.QUESTIONS_BOARD_ID)
-                    and not self.data_service.get_board(selected)):
-                selected = self.FAVORITES_BOARD_ID
-            self._on_board_select(selected)
+            if upload and self._reset_recurring_tasks():
+                # 将本周期任务状态纳入本次上传，而不是推送后才修改。
+                self._refresh_sidebar()
+                if self.selected_board_id == self.TASKS_BOARD_ID:
+                    self._refresh_tasks()
+            operation = self.git_service.upload_data if upload else self.git_service.pull_data
+            success, msg = await asyncio.to_thread(operation, self.data_service)
+            if not upload and success:
+                self._reset_recurring_tasks()
+                self._refresh_sidebar()
+                selected = self.selected_board_id
+                if (selected not in (self.FAVORITES_BOARD_ID, self.TASKS_BOARD_ID, self.QUESTIONS_BOARD_ID)
+                        and not self.data_service.get_board(selected)):
+                    selected = self.FAVORITES_BOARD_ID
+                self._on_board_select(selected)
 
             # 关闭同步中提示
             syncing_snack.open = False
@@ -1017,7 +1037,7 @@ class CmdBoxApp:
 
             if success:
                 self.config_service.update_last_sync()
-                self._show_snack_bar("同步成功，数据已更新")
+                self._show_snack_bar(msg)
             else:
                 self._show_snack_bar(msg, 8000)
         except Exception as ex:
@@ -1027,32 +1047,12 @@ class CmdBoxApp:
                 if syncing_snack in self.page.overlay:
                     self.page.overlay.remove(syncing_snack)
                 self.page.update()
-            self._show_snack_bar(f"同步失败: {str(ex)}", 8000)
+            self._show_snack_bar(f"{action}失败: {str(ex)}", 8000)
         finally:
             self._syncing = False
             for control in edit_controls:
                 control.disabled = False
             self.page.update(*edit_controls)
-
-    async def _on_restart(self, e):
-        """重启应用"""
-        if getattr(self, '_syncing', False):
-            self._show_snack_bar('请等待同步完成后重启')
-            return
-        import subprocess
-        import asyncio
-        self._closing = True
-        try:
-            await asyncio.to_thread(self.data_service.flush)
-            subprocess.Popen([sys.executable] + sys.argv)
-        except OSError as error:
-            self._closing = False
-            self._show_snack_bar(str(error), 10000)
-            return
-        if self._recurring_check_task:
-            self._recurring_check_task.cancel()
-        await self._close_window()
-        os._exit(0)
 
     def _on_export_click(self, e):
         """点击导出按钮"""
@@ -1155,7 +1155,7 @@ set thePath to POSIX path of (choose file name default name "{filename}" with pr
     def _on_settings(self, e):
         """设置"""
         if getattr(self, '_syncing', False):
-            self._show_snack_bar('请等待同步完成后修改设置')
+            self._show_snack_bar('请等待上传或拉取完成后修改设置')
             return
         # 获取当前远程仓库地址
         current_remote_url = self.git_service.get_remote_url() or ""

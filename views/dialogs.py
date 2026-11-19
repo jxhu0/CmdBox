@@ -527,7 +527,7 @@ class SettingsDialog(ft.AlertDialog):
             ft.Text("配置说明：", size=12, weight=ft.FontWeight.BOLD),
             ft.Text("1. 在 GitHub/GitLab 创建一个私有仓库", size=11, color=ft.Colors.GREY_600),
             ft.Text("2. 复制仓库的 HTTPS 或 SSH 地址到上方输入框", size=11, color=ft.Colors.GREY_600),
-            ft.Text("3. 点击保存后，使用同步功能推送数据", size=11, color=ft.Colors.GREY_600),
+            ft.Text("3. 点击保存后，使用“上传数据”或“拉取数据”", size=11, color=ft.Colors.GREY_600),
         ], spacing=2)
 
         self.tutorial_btn = ft.TextButton(
@@ -550,7 +550,7 @@ class SettingsDialog(ft.AlertDialog):
             self.tutorial_btn,
             ft.Divider(height=10, color="transparent"),
             ft.Text("数据备份", size=12, weight=ft.FontWeight.BOLD),
-            ft.Text("同步前会自动创建备份，最多保留10个", size=10, color=ft.Colors.GREY_600),
+            ft.Text("上传或拉取前会自动创建备份，最多保留10个", size=10, color=ft.Colors.GREY_600),
             self.backup_list,
             ft.Container(height=10),
             ft.Row([
@@ -602,7 +602,7 @@ class SettingsDialog(ft.AlertDialog):
                         ft.Container(height=6),
                         ft.Text("2. 打开 CmdBox，在向导中选择该文件夹路径", size=13, color=ft.Colors.GREY_700),
                         ft.Container(height=6),
-                        ft.Text("3. 进入应用后即可直接使用同步功能", size=13, color=ft.Colors.GREY_700),
+                        ft.Text("3. 进入应用后点击“拉取数据”获取远程数据", size=13, color=ft.Colors.GREY_700),
                         ft.Container(height=12),
                         ft.Text("提示：通过 git clone 克隆的仓库会自动配置远程地址，无需手动填写。", size=12, color=ft.Colors.BLUE_600),
                     ], tight=True),

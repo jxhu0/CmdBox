@@ -74,12 +74,12 @@ class GitService:
             return False, f"获取状态失败: {e}"
 
     def commit(self, message: str = "更新数据") -> Tuple[bool, str]:
-        """提交更改"""
+        """只提交应用数据，不包含备份或仓库中的其他文件。"""
         try:
             repo = self._get_repo()
-            repo.git.add(A=True)
-            if repo.is_dirty():
-                repo.index.commit(message)
+            repo.git.add("--", "data.json")
+            if not repo.head.is_valid() or repo.git.diff("HEAD", "--", "data.json"):
+                repo.git.commit("--only", "-m", message, "--", "data.json")
                 return True, "提交成功"
             return True, "没有需要提交的更改"
         except Exception as e:
@@ -90,7 +90,7 @@ class GitService:
         try:
             repo = self._get_repo()
             if not self.has_remote():
-                return True, "没有配置远程仓库"
+                return False, "未配置远程仓库"
 
             origin = repo.remotes.origin
             target_branch = "main"
@@ -107,12 +107,12 @@ class GitService:
             # 检查远程是否有 main 分支
             remote_branch = f"origin/{target_branch}"
             if remote_branch not in [ref.name for ref in origin.refs]:
-                return True, "远程没有对应分支，跳过拉取"
+                return True, "远程没有 main 分支，无可拉取的数据"
 
             # 不自动提交用户尚未处理的合并。
             merge_head_path = Path(repo.git_dir) / "MERGE_HEAD"
             if merge_head_path.exists():
-                return False, "存在未完成的合并，请先处理后再同步"
+                return False, "存在未完成的合并，请先处理后再拉取"
 
             # fetch 已获取远程数据，直接合并，避免重复网络请求。
             data_file = self.repo_path / 'data.json'
@@ -124,7 +124,7 @@ class GitService:
                 if merge_head_path.exists():
                     if not self._merge_initial_data(repo, remote_branch):
                         repo.git.merge("--abort")
-                        return False, "同步存在合并冲突，已中止合并并保留本地和远程数据，请处理冲突后重试"
+                        return False, "拉取存在合并冲突，已中止合并并保留本地和远程数据，请处理冲突后重试"
                 else:
                     raise e
 
@@ -143,7 +143,7 @@ class GitService:
         except Exception as e:
             error_msg = str(e)
             if "no reference" in error_msg.lower() or "couldn't find remote ref" in error_msg.lower():
-                return True, "远程仓库为空，跳过拉取"
+                return True, "远程仓库为空，无可拉取的数据"
             return False, f"拉取失败: {error_msg}"
 
     def _merge_initial_data(self, repo, remote_branch) -> bool:
@@ -183,16 +183,18 @@ class GitService:
         try:
             repo = self._get_repo()
             if not self.has_remote():
-                return True, "没有配置远程仓库"
+                return False, "未配置远程仓库"
 
             target_branch = "main"
 
-            # 推送当前已合并的数据，不切换到可能过期的本地 main 分支。
+            # 普通推送会拒绝覆盖远程的新提交；上传不隐式拉取或强制覆盖。
             repo.git.push("--set-upstream", "origin", f"HEAD:{target_branch}")
 
             return True, "推送成功"
         except Exception as e:
             error_msg = str(e)
+            if any(reason in error_msg.lower() for reason in ("non-fast-forward", "fetch first", "[rejected]")):
+                return False, "远程有尚未拉取的改动，请先点击“拉取数据”，成功后再上传"
             return False, f"推送失败: {error_msg}"
 
     def get_remote_url(self) -> Optional[str]:
@@ -225,42 +227,44 @@ class GitService:
         except Exception as e:
             return False, f"设置失败: {e}"
 
-    def sync(self, data_service=None) -> Tuple[bool, str]:
-        """同步：保存并备份 -> 提交 -> 拉取 -> 重载 -> 推送。"""
+    def _prepare_transfer(self, data_service) -> Tuple[bool, str]:
+        """等待本地保存并备份，再提交数据，为上传或拉取做准备。"""
         if not self.has_remote():
             return False, "未配置远程仓库"
         repo = self._get_repo()
         if (Path(repo.git_dir) / "MERGE_HEAD").exists():
-            return False, "存在未完成的合并，请先处理后再同步"
-        # 同步前先创建备份
+            return False, "存在未完成的合并，请先处理后再上传或拉取"
         if data_service:
             try:
-                data_service.save()
+                # 编辑操作已排队保存；不要用可能过期的内存再次覆盖磁盘。
                 data_service.flush()
                 data_service.backup()
             except Exception as e:
-                return False, f"同步前保存或备份失败: {e}"
+                return False, f"操作前保存或备份失败: {e}"
 
-        # 提交本地更改
-        success, msg = self.commit(f"同步数据 {datetime.now().isoformat()}")
+        return self.commit(f"保存本地数据 {datetime.now().isoformat()}")
+
+    def upload_data(self, data_service=None) -> Tuple[bool, str]:
+        """提交并上传本地数据，不拉取远程改动。"""
+        success, msg = self._prepare_transfer(data_service)
         if not success:
             return False, msg
+        success, msg = self.push()
+        return (True, "上传成功") if success else (False, msg)
 
-        # 拉取远程更改
+    def pull_data(self, data_service=None) -> Tuple[bool, str]:
+        """备份并保留本地更改，拉取后重载；不推送任何提交。"""
+        success, msg = self._prepare_transfer(data_service)
+        if not success:
+            return False, msg
         success, msg = self.pull()
         if not success:
             return False, msg
 
-        # 拉取后立即更新内存；即使推送失败，后续编辑也基于已拉取的数据。
         if data_service:
             try:
                 data_service.load()
             except Exception as e:
-                return False, f"同步后加载数据失败: {e}"
+                return False, f"拉取后加载数据失败: {e}"
 
-        # 推送
-        success, msg = self.push()
-        if not success:
-            return False, msg
-
-        return True, "同步完成"
+        return True, msg

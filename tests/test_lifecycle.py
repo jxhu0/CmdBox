@@ -113,27 +113,3 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
                 if pending:
                     await pending
                 app.data_service.close()
-
-    async def test_failed_restart_keeps_periodic_checks_enabled(self):
-        app = self.make_app()
-        with patch('subprocess.Popen', side_effect=OSError('cannot launch')):
-            await app._on_restart(None)
-        self.assertFalse(app._closing)
-        app._recurring_check_task.cancel.assert_not_called()
-        self.assertTrue(app.page.window.prevent_close)
-        app.page.window.close.assert_not_awaited()
-        app.page.window.destroy.assert_not_called()
-        app._show_snack_bar.assert_called_once()
-
-    async def test_restart_uses_same_windows_close_path_after_flush_and_launch(self):
-        app = self.make_app()
-        calls = []
-        app.data_service.flush.side_effect = lambda: calls.append('saved')
-        app.page.update.side_effect = lambda: calls.append(('patch', app.page.window.prevent_close))
-        app.page.window.close.side_effect = lambda: calls.append('close')
-        with patch('app.sys', Mock(platform='win32', executable='python', argv=['main.py'])), \
-                patch('subprocess.Popen', side_effect=lambda *_: calls.append('launch')), \
-                patch('app.os._exit', side_effect=lambda *_: calls.append('exit')):
-            await app._on_restart(None)
-        self.assertEqual(calls, ['saved', 'launch', ('patch', False), 'close', 'exit'])
-        app.page.window.destroy.assert_not_awaited()
