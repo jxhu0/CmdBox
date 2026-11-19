@@ -174,7 +174,8 @@ class BoardDialog(ft.AlertDialog):
         if not _validate_required(self, [(self.name_field, '请输入板块名称')]):
             return
         if self.on_save_callback:
-            self.on_save_callback(self.name_field.value.strip(), self.selected_icon, self.desc_field.value)
+            if self.on_save_callback(self.name_field.value.strip(), self.selected_icon, self.desc_field.value) is False:
+                return
         if self.page:
             self.page.pop_dialog()
 
@@ -332,7 +333,7 @@ class CommandDialog(ft.AlertDialog):
             tags_str = self.tags_field.value or ""
             tags = [t.strip() for t in tags_str.split(",") if t.strip()]
 
-            self.on_save_callback(
+            result = self.on_save_callback(
                 title=self.title_field.value.strip(),
                 board_id=self.board_dropdown.value,
                 content=self.content_field.value,
@@ -340,6 +341,8 @@ class CommandDialog(ft.AlertDialog):
                 tags=tags,
                 is_favorite=self.favorite_checkbox.value
             )
+            if result is False:
+                return
         if self.page:
             self.page.pop_dialog()
 
@@ -371,10 +374,11 @@ class ConfirmDialog(ft.AlertDialog):
             self.page.pop_dialog()
 
     def _on_confirm(self, e):
+        if self.on_confirm_callback:
+            if self.on_confirm_callback() is False:
+                return
         if self.page:
             self.page.pop_dialog()
-        if self.on_confirm_callback:
-            self.on_confirm_callback()
         if self.page:
             self.page.update()
 
@@ -434,6 +438,7 @@ class SettingsDialog(ft.AlertDialog):
         self._version = app_module.__version__
         self._latest_version = latest_version
         self.on_restore_callback = on_restore
+        self._restoring = False
         self.on_path_save_callback = on_path_save
         self.data_service = data_service
         self.path_data = {"path": repo_path}
@@ -511,7 +516,7 @@ class SettingsDialog(ft.AlertDialog):
             self.tutorial_btn,
             ft.Divider(height=10, color="transparent"),
             ft.Text("数据备份", size=12, weight=ft.FontWeight.BOLD),
-            ft.Text("上传或拉取前会自动创建备份，最多保留10个", size=10, color=ft.Colors.GREY_600),
+            ft.Text("自动备份保留最近10个；冲突时的本地副本单独保留，请确认后手动清理", size=10, color=ft.Colors.GREY_600),
             self.backup_list,
             ft.Container(height=10),
             ft.Row([
@@ -611,10 +616,11 @@ class SettingsDialog(ft.AlertDialog):
             )
             return
 
-        for backup in backups[:5]:  # 只显示最近5个
+        for backup in backups:
+            label = '本地未上传副本' if backup.get('local_draft') else '自动备份'
             row = ft.Row([
-                ft.Text(backup["name"], size=11, expand=True),
-                ft.Text(backup["created"], size=10, color=ft.Colors.GREY_500),
+                ft.Text(f'{label} · {backup["created"]}', size=11, expand=True,
+                        tooltip=backup['name']),
                 ft.TextButton(
                     "恢复",
                     on_click=lambda e, path=backup["path"]: self._on_restore(path)
@@ -624,18 +630,33 @@ class SettingsDialog(ft.AlertDialog):
 
     def _on_restore(self, backup_path: str):
         """恢复备份"""
+        if self._restoring:
+            return
         page = self.page
 
         async def restore(e):
             import inspect
+            if self._restoring:
+                return
+            self._restoring = True
             page.pop_dialog()
-            if self.on_restore_callback:
-                result = self.on_restore_callback(backup_path)
-                if inspect.isawaitable(result):
-                    result = await result
-                if result is False:
-                    return
-            page.pop_dialog()
+            self.disabled = True
+            self.update()
+            try:
+                if self.on_restore_callback:
+                    result = self.on_restore_callback(backup_path)
+                    if inspect.isawaitable(result):
+                        result = await result
+                    if result is False:
+                        return
+                # 只关闭自身，异步等待期间可能出现其他提示窗口。
+                self.open = False
+                self.update()
+            finally:
+                self._restoring = False
+                self.disabled = False
+                if self.open:
+                    self.update()
 
         page.show_dialog(ft.AlertDialog(
             modal=True, title=ft.Text('确认恢复备份'),
@@ -644,10 +665,14 @@ class SettingsDialog(ft.AlertDialog):
                      ft.TextButton('恢复', on_click=restore)]))
 
     def _on_cancel(self, e):
+        if self._restoring:
+            return
         if self.page:
             self.page.pop_dialog()
 
     def _on_save(self, e):
+        if self._restoring:
+            return
         new_path = self.path_data["path"].strip()
         if self.on_save_callback:
             if self.on_save_callback(self.remote_field.value) is False:
@@ -734,7 +759,8 @@ class TaskDialog(ft.AlertDialog):
         priority = self.priority_dropdown.value or "medium"
         recurring = self.recurring_dropdown.value or ""
         if self.on_save_callback:
-            self.on_save_callback(title, description, priority, recurring)
+            if self.on_save_callback(title, description, priority, recurring) is False:
+                return
         if self.page:
             self.page.pop_dialog()
 
@@ -811,6 +837,7 @@ class QuestionDialog(ft.AlertDialog):
         answer = (self.answer_field.value or "").strip()
         priority = self.priority_dropdown.value or "medium"
         if self.on_save_callback:
-            self.on_save_callback(title, description, answer, priority)
+            if self.on_save_callback(title, description, answer, priority) is False:
+                return
         if self.page:
             self.page.pop_dialog()

@@ -5,6 +5,7 @@ from models.command import Command
 from models.board import Board
 from views.command_card import CommandCard
 from views.isolated import IsolatedControl
+from views.list_helpers import empty_state, scroll_to_top
 
 
 class CommandStack(IsolatedControl, ft.Stack):
@@ -45,23 +46,20 @@ class CommandList(IsolatedControl, ft.ListView):
         self._visible_limit = 20
         self._page_start = 0
         self._query_ids = ()
+        self.empty_filtered = False
         self._render_signature = None
 
         self.expand = True
         self.controls = self._build_empty_state()
 
     def _build_empty_state(self) -> List[ft.Control]:
-        return [
-            ft.Container(
-                content=ft.Column([
-                    ft.Icon(ft.Icons.INBOX_OUTLINED, size=48, color=ft.Colors.GREY_400),
-                    ft.Text("暂无指令", color=ft.Colors.GREY_500),
-                    ft.Text("点击下方按钮添加第一条指令", size=12, color=ft.Colors.GREY_400),
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, tight=True),
-                alignment=ft.Alignment(0.5, 0.5),
-                expand=True
-            )
-        ]
+        return empty_state('指令', ft.Icons.INBOX_OUTLINED, self.empty_filtered)
+
+    def _card_signature(self, command, board):
+        # 正文是不可变字符串，直接比较即可；repr 会复制整段长正文。
+        snapshot = command.to_dict()
+        snapshot['tags'] = tuple(command.tags)
+        return (id(command), snapshot, id(board), board.to_dict(), self.show_move_buttons)
 
     def _build_command_cards(self) -> List[ft.Control]:
         if not self.commands:
@@ -72,7 +70,7 @@ class CommandList(IsolatedControl, ft.ListView):
             board = self.boards.get(cmd.board_id)
             if not board:
                 continue
-            signature = (id(cmd), repr(cmd.to_dict()), id(board), repr(board.to_dict()), self.show_move_buttons)
+            signature = self._card_signature(cmd, board)
             cached = self._card_cache.get(cmd.id)
             if cached and cached[0] == signature:
                 cards.append(cached[1])
@@ -113,14 +111,12 @@ class CommandList(IsolatedControl, ft.ListView):
             self._page_start = 0
             self._query_ids = ids
         self.commands = commands
-        signature = (ids, self._visible_limit, self._page_start, self.show_move_buttons,
-                     [(id(cmd), cmd.to_dict(), id(self.boards[cmd.board_id]), self.boards[cmd.board_id].to_dict())
+        signature = (ids, self._visible_limit, self._page_start, self.show_move_buttons, self.empty_filtered,
+                     [self._card_signature(cmd, self.boards[cmd.board_id])
                       for cmd in commands[self._page_start:self._page_start + self._visible_limit] if cmd.board_id in self.boards])
         if signature == self._render_signature:
             return
-        # Snapshot values rather than holding references to mutable model tags.
-        import copy
-        self._render_signature = copy.deepcopy(signature)
+        self._render_signature = signature
         self.controls = self._build_command_cards()
         if update:
             self.update()
@@ -129,11 +125,13 @@ class CommandList(IsolatedControl, ft.ListView):
         self._page_start += self._visible_limit
         self._render_signature = None
         self.update_commands(self.commands)
+        scroll_to_top(self)
 
     def _previous_page(self, e):
         self._page_start = max(0, self._page_start - self._visible_limit)
         self._render_signature = None
         self.update_commands(self.commands)
+        scroll_to_top(self)
 
     def update_boards(self, boards: Dict[str, Board]):
         self.boards = boards

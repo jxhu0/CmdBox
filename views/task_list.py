@@ -1,6 +1,7 @@
 # views/task_list.py
 import flet as ft
 from views.isolated import IsolatedControl
+from views.list_helpers import empty_state, sort_bar, scroll_to_top
 from typing import List, Callable
 from models.task import Task
 from views.task_card import TaskCard
@@ -39,6 +40,7 @@ class TaskList(IsolatedControl, ft.ListView):
         self.on_clear_completed = on_clear_completed
         self.tasks: List[Task] = []
         self._query_ids = ()
+        self.empty_filtered = False
         self._card_cache = {}
         self._visible_limit = 20
         self._page_start = 0
@@ -53,46 +55,21 @@ class TaskList(IsolatedControl, ft.ListView):
         """根据当前排序模式排序任务"""
         mode = SORT_MODES[self.sort_mode_index][0]
         tasks = list(self.tasks)
+        # 先按时间倒序排列，后续稳定排序保证同优先级始终最新在前。
+        tasks.sort(key=lambda t: t.created_at or '', reverse=True)
         if mode == "priority":
             # 执行中优先，再按优先级，再按创建时间
-            tasks.sort(key=lambda t: (not t.in_progress, PRIORITY_ORDER.get(t.priority, 1), t.created_at or ""), reverse=False)
+            tasks.sort(key=lambda t: (not t.in_progress, PRIORITY_ORDER.get(t.priority, 1)))
         elif mode == "time":
             # 执行中优先，再按时间倒序
-            tasks.sort(key=lambda t: (not t.in_progress, ""), reverse=False)
-            in_progress_tasks = [t for t in tasks if t.in_progress]
-            other_tasks = [t for t in tasks if not t.in_progress]
-            other_tasks.sort(key=lambda t: t.created_at or "", reverse=True)
-            tasks = in_progress_tasks + other_tasks
+            tasks.sort(key=lambda t: not t.in_progress)
         elif mode == "status":
             # 执行中 > 待办 > 已完成
             tasks.sort(key=lambda t: (2 if t.completed else (0 if t.in_progress else 1), PRIORITY_ORDER.get(t.priority, 1)))
         return tasks
 
     def _build_sort_bar(self) -> ft.Control:
-        """直接选择排序方式，并标记当前选项。"""
-        _, icon, tooltip = SORT_MODES[self.sort_mode_index]
-        return ft.Container(
-            content=ft.Row([
-                ft.Container(expand=True),
-                ft.PopupMenuButton(
-                    content=ft.Row([
-                        ft.Icon(icon, size=16, color=ft.Colors.GREY_500),
-                        ft.Text(tooltip, size=12, color=ft.Colors.GREY_700),
-                        ft.Icon(ft.Icons.ARROW_DROP_DOWN, size=16),
-                    ], spacing=4, tight=True),
-                    tooltip="选择排序方式",
-                    items=[
-                        ft.PopupMenuItem(
-                            content=label,
-                            checked=index == self.sort_mode_index,
-                            on_click=lambda e, index=index: self._select_sort_mode(index),
-                        )
-                        for index, (_, _, label) in enumerate(SORT_MODES)
-                    ],
-                ),
-            ], spacing=0, tight=True),
-            padding=ft.padding.only(right=4, top=2),
-        )
+        return sort_bar(SORT_MODES, self.sort_mode_index, self._select_sort_mode)
 
     def _select_sort_mode(self, index):
         if index == self.sort_mode_index:
@@ -101,19 +78,10 @@ class TaskList(IsolatedControl, ft.ListView):
         self._page_start = 0
         self.controls = self._build_task_cards()
         self.update()
+        scroll_to_top(self)
 
     def _build_empty_state(self) -> List[ft.Control]:
-        return [
-            ft.Container(
-                content=ft.Column([
-                    ft.Icon(ft.Icons.CHECKLIST_OUTLINED, size=48, color=ft.Colors.GREY_400),
-                    ft.Text("暂无任务", color=ft.Colors.GREY_500),
-                    ft.Text("点击下方按钮添加第一个任务", size=12, color=ft.Colors.GREY_400),
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, tight=True),
-                alignment=ft.Alignment(0.5, 0.5),
-                expand=True
-            )
-        ]
+        return empty_state('任务', ft.Icons.CHECKLIST_OUTLINED, self.empty_filtered)
 
     def _build_task_card(self, task: Task) -> TaskCard:
         snapshot = (id(task), task.to_dict())
@@ -225,8 +193,10 @@ class TaskList(IsolatedControl, ft.ListView):
         self._page_start += self._visible_limit
         self.controls = self._build_task_cards()
         self.update()
+        scroll_to_top(self)
 
     def _previous_page(self, e):
         self._page_start = max(0, self._page_start - self._visible_limit)
         self.controls = self._build_task_cards()
         self.update()
+        scroll_to_top(self)

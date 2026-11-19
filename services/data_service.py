@@ -38,6 +38,7 @@ class DataService:
         self.tasks: List[Task] = []
         self.questions: List[Question] = []
         self.revision = 0
+        self.records_generation = 0
         self._save_lock = threading.Lock()
         self._save_ready = threading.Condition(self._save_lock)
         self._save_generation = 0
@@ -51,8 +52,8 @@ class DataService:
         self._snapshot_cache = {name: {} for name in ('boards', 'commands', 'tasks', 'questions')}
         self._search_indexes = {
             'commands': SearchIndex(('title', 'content', 'description', 'tags')),
-            'tasks': SearchIndex(('title', 'description')),
-            'questions': SearchIndex(('title', 'description', 'answer')),
+            'tasks': SearchIndex(('title', 'description'), max_bytes=16 * 1024 * 1024),
+            'questions': SearchIndex(('title', 'description', 'answer'), max_bytes=32 * 1024 * 1024),
         }
 
     def enable_background_saves(self, on_error=None):
@@ -219,6 +220,7 @@ class DataService:
 
     def _apply_records(self, records):
         self.revision += 1
+        self.records_generation += 1
         for name, items in records.items():
             setattr(self, name, items)
         self._snapshot_cache = {name: {} for name in self._snapshot_cache}
@@ -289,9 +291,15 @@ class DataService:
         if not self.backup_dir.exists():
             return
 
-        backups = sorted(self.backup_dir.glob("data_*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+        backups = self._automatic_backups()
         for old_backup in backups[10:]:
             old_backup.unlink()
+
+    def _automatic_backups(self):
+        """冲突副本不参与自动清理或静默恢复，避免覆盖用户的恢复选择。"""
+        return sorted((path for path in self.backup_dir.glob('data_*.json')
+                       if not path.name.startswith('data_local_')),
+                      key=lambda path: path.stat().st_mtime, reverse=True)
 
     def get_backups(self) -> List[dict]:
         """获取所有备份文件列表"""
@@ -304,6 +312,7 @@ class DataService:
             backups.append({
                 "path": str(f),
                 "name": f.name,
+                "local_draft": f.name.startswith('data_local_'),
                 "size": stat.st_size,
                 "created": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
             })
@@ -321,7 +330,7 @@ class DataService:
         """尝试从最新备份恢复，返回是否成功"""
         if not self.backup_dir.exists():
             return None
-        backups = sorted(self.backup_dir.glob("data_*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+        backups = self._automatic_backups()
         for backup in backups:
             try:
                 with open(backup, "r", encoding="utf-8") as f:

@@ -123,6 +123,30 @@ class DataIntegrityTests(unittest.TestCase):
         self.service.add_task(Task.create('Windows 换行后继续保存'))
         self.assertEqual(self.document()['tasks'][0]['title'], 'Windows 换行后继续保存')
 
+    def test_automatic_backup_rotation_never_deletes_local_conflict_drafts(self):
+        self.service.backup_dir.mkdir()
+        draft = self.service.backup_dir / 'data_local_old.json'
+        draft.write_text(json.dumps(self.document()), encoding='utf-8')
+        for _ in range(12):
+            self.service.backup()
+        backups = self.service.get_backups()
+        self.assertTrue(draft.exists())
+        self.assertEqual(len([b for b in backups if not b['local_draft']]), 10)
+        self.assertEqual(len([b for b in backups if b['local_draft']]), 1)
+
+    def test_corruption_recovers_automatic_backup_and_leaves_local_draft_for_manual_choice(self):
+        self.service.backup()
+        document = self.document()
+        document['tasks'] = [Task.create('未上传的本地修改').to_dict()]
+        draft = self.service.backup_dir / 'data_local_latest.json'
+        draft.write_text(json.dumps(document), encoding='utf-8')
+        self.service.data_file.write_text('{broken', encoding='utf-8')
+        self.service.load()
+        self.assertEqual(self.service.tasks, [])
+        self.assertTrue(draft.exists())
+        self.service.restore_backup(draft)
+        self.assertEqual(self.service.tasks[0].title, '未上传的本地修改')
+
 
 class ConfigIntegrityTests(unittest.TestCase):
     def test_failed_atomic_write_preserves_existing_configuration(self):

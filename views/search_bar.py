@@ -168,25 +168,29 @@ class SearchBar(IsolatedControl, ft.Container):
         self.boards = boards
         snapshot = [(b.id, b.name) for b in boards]
         if snapshot == getattr(self, '_boards_snapshot', None):
-            return
+            return False
         self._boards_snapshot = snapshot
         self.board_dropdown.options = [ft.dropdown.DropdownOption('all', '全部板块')] + [
             ft.dropdown.DropdownOption(b.id, b.name) for b in boards]
-        if self.board_dropdown.value not in {'all', *(b.id for b in boards)}:
+        cleared = self.board_dropdown.value not in {'all', *(b.id for b in boards)}
+        if cleared:
             self.board_dropdown.value = 'all'
         self.board_dropdown.update()
+        return cleared
 
     def update_tags(self, tags: List[str]):
         self.tags = tags
         snapshot = sorted(tags)
         if snapshot == getattr(self, '_tags_snapshot', None):
-            return
+            return False
         self._tags_snapshot = snapshot
         self.tag_dropdown.options = [ft.dropdown.DropdownOption('all', '全部标签')] + [
             ft.dropdown.DropdownOption(tag, f'#{tag}') for tag in snapshot]
-        if self.tag_dropdown.value not in {'all', *tags}:
+        cleared = self.tag_dropdown.value not in {'all', *tags}
+        if cleared:
             self.tag_dropdown.value = 'all'
         self.tag_dropdown.update()
+        return cleared
 
     def reset_filters(self, board_id=None):
         self.cancel_pending_search()

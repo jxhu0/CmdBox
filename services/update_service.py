@@ -14,6 +14,8 @@ class UpdateService:
     def is_newer_version(candidate: str, current: str) -> bool:
         """按数字比较发布版本；忽略未知格式和预发布版本。"""
         def parse(version):
+            if not isinstance(version, str):
+                return None
             match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)(?:\+[0-9A-Za-z.-]+)?", version or "")
             return tuple(map(int, match.groups())) if match else None
 
@@ -40,8 +42,12 @@ class UpdateService:
                 return False, None, None
 
             data = response.json()
+            if not isinstance(data, dict):
+                return False, None, None
             latest_version = data.get("tag_name", "")
-            release_notes = data.get("body", "")
+            release_notes = data.get("body") or ""
+            if not isinstance(latest_version, str) or not isinstance(release_notes, str):
+                return False, None, None
 
             if (not data.get('draft') and not data.get('prerelease')
                     and UpdateService.is_newer_version(latest_version, current_version)):

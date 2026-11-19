@@ -1,5 +1,5 @@
 # app.py
-__version__ = "1.4.4"
+__version__ = "1.5.0"
 
 import os
 import sys
@@ -14,6 +14,7 @@ from services.git_service import GitService
 from services.clipboard_service import ClipboardService
 from services.update_service import UpdateService
 from services.file_dialog_service import choose_export_path
+from services.search_runner import SearchRunner
 from models.board import Board
 from models.command import Command
 from models.task import Task
@@ -122,6 +123,8 @@ class CmdBoxApp:
             await asyncio.to_thread(self.git_service.cleanup)
         if self._recurring_check_task:
             self._recurring_check_task.cancel()
+        if getattr(self, '_search_runner', None):
+            self._search_runner.close()
         await self._close_window()
 
     def _on_page_resize(self, event):
@@ -262,33 +265,39 @@ class CmdBoxApp:
     def _check_for_updates(self):
         """异步检查更新"""
         import threading
+        if getattr(self, '_checking_updates', False) or self._closing:
+            return
+        self._checking_updates = True
 
         def check():
-            # 如果当前版本高于缓存的最新版本，清除缓存以强制刷新
-            cached = self.config_service.get_latest_version()
-            if cached:
-                # 去掉 v 前缀比较
-                cached_ver = cached.lstrip("v")
-                current_ver = __version__.lstrip("v")
-                if UpdateService.is_newer_version(current_ver, cached_ver):
-                    self.config_service.clear_latest_version_cache()
+            try:
+                has_update, latest_ver, notes = UpdateService.check_for_updates(__version__)
+                if self._closing:
+                    return
+                if latest_ver and latest_ver != self.config_service.get_latest_version():
+                    try:
+                        self.config_service.set_latest_version(latest_ver)
+                    except OSError:
+                        # 缓存保存失败不应阻止本次更新提示，也不影响主数据。
+                        pass
+                if has_update and not self.config_service.is_in_update_remind_period():
+                    self.page.run_task(self._show_update_dialog, latest_ver, notes or "")
+            finally:
+                self._checking_updates = False
 
-            # 总是检测最新版本并保存到配置
-            has_update, latest_ver, notes = UpdateService.check_for_updates(__version__)
-            if latest_ver:
-                self.config_service.set_latest_version(latest_ver)
-
-            # 只有在免提醒期内才跳过弹窗
-            if has_update and not self.config_service.is_in_update_remind_period():
-                self.page.run_task(self._show_update_dialog, latest_ver, notes or "")
-
-        thread = threading.Thread(target=check, daemon=True)
-        thread.start()
+        self._update_check_thread = threading.Thread(target=check, daemon=True)
+        self._update_check_thread.start()
 
     async def _show_update_dialog(self, version, notes):
         """显示更新对话框"""
+        if self._closing or getattr(self, '_syncing', False):
+            return
         def on_remind_later():
-            self.config_service.set_update_remind_until()
+            try:
+                self.config_service.set_update_remind_until()
+            except OSError as error:
+                self._show_snack_bar(f'提醒设置保存失败：{error}', 6000)
+                return False
 
         dialog = UpdateDialog(version, notes, on_remind_later=on_remind_later)
         self.page.show_dialog(dialog)
@@ -503,6 +512,7 @@ class CmdBoxApp:
             self.command_list.set_show_move_buttons(False)
         else:
             self.command_list.set_show_move_buttons(True)
+        view.empty_filtered = bool(self.search_keyword or self.search_tag)
         view.update_commands(commands, update=not is_new)
         if old_view is not view:
             old_view.visible = False
@@ -528,8 +538,10 @@ class CmdBoxApp:
             pending_task_count=pending_count,
             pending_question_count=pending_question_count
         )
-        self.search_bar.update_boards(self.data_service.boards)
-        self.search_bar.update_tags(self._get_all_tags())
+        if self.search_bar.update_boards(self.data_service.boards):
+            self.search_board_ids = None
+            self.search_bar.cancel_pending_search()
+        self._refresh_search_tags()
         # 同时更新指令列表的板块字典
         boards_dict = {b.id: b for b in self.data_service.boards}
         self.command_list.update_boards(boards_dict)
@@ -582,20 +594,23 @@ class CmdBoxApp:
 
     async def _on_search(self, keyword: str, board_ids: Optional[List[str]], tag: Optional[str] = None):
         """后台搜索；输入、页面或数据版本变化时，不显示过期结果。"""
-        import asyncio
+        if not getattr(self, '_search_runner', None):
+            self._search_runner = SearchRunner()
         selected = self.selected_board_id
+        search_bar = self.search_bar
         generation = self.search_bar._search_generation
         while True:
             if getattr(self, '_syncing', False) or getattr(self, '_closing', False):
                 return
             revision = self.data_service.revision
             if selected == self.TASKS_BOARD_ID:
-                results = await asyncio.to_thread(self.data_service.search_tasks, keyword)
+                results = await self._search_runner.run(self.data_service.search_tasks, keyword)
             elif selected == self.QUESTIONS_BOARD_ID:
-                results = await asyncio.to_thread(self.data_service.search_questions, keyword)
+                results = await self._search_runner.run(self.data_service.search_questions, keyword)
             else:
-                results = await asyncio.to_thread(self.data_service.search_commands, keyword, board_ids, tag)
-            if (generation != self.search_bar._search_generation or selected != self.selected_board_id
+                results = await self._search_runner.run(self.data_service.search_commands, keyword, board_ids, tag)
+            if (search_bar is not self.search_bar or generation != self.search_bar._search_generation
+                    or selected != self.selected_board_id
                     or getattr(self, '_syncing', False) or getattr(self, '_closing', False)):
                 return
             if revision == self.data_service.revision:
@@ -613,7 +628,34 @@ class CmdBoxApp:
         tags = set()
         for cmd in self.data_service.commands:
             tags.update(cmd.tags)
-        return list(tags)
+        return sorted(tags)
+
+    def _refresh_search_tags(self):
+        if self.search_bar.update_tags(self._get_all_tags()):
+            self.search_tag = None
+            self.search_bar.cancel_pending_search()
+
+    def _can_edit_data(self):
+        if getattr(self, '_closing', False):
+            return False
+        if getattr(self, '_syncing', False):
+            self._show_snack_bar('请等待当前数据操作完成后再修改')
+            return False
+        return True
+
+    def _guard_data_edit(self, callback):
+        """延迟的弹窗回调同时检查忙碌状态与数据是否已整体替换。"""
+        service = self.data_service
+        generation = service.records_generation
+
+        def guarded(*args, **kwargs):
+            if not self._can_edit_data():
+                return False
+            if service is not self.data_service or generation != service.records_generation:
+                self._show_snack_bar('数据已更新，请关闭此窗口后重新操作', 6000)
+                return False
+            return callback(*args, **kwargs)
+        return guarded
 
     def _on_add_board(self):
         """添加板块"""
@@ -623,7 +665,7 @@ class CmdBoxApp:
                 self.data_service.add_board(board)
                 self._refresh_sidebar()
 
-        dialog = BoardDialog("新建板块", on_save=on_save)
+        dialog = BoardDialog("新建板块", on_save=self._guard_data_edit(on_save))
         self.page.show_dialog(dialog)
 
     def _on_edit_board(self, board_id: str):
@@ -639,7 +681,7 @@ class CmdBoxApp:
                 self._refresh_sidebar()
                 self._refresh_board_desc()
 
-        dialog = BoardDialog("编辑板块", board=board, on_save=on_save)
+        dialog = BoardDialog("编辑板块", board=board, on_save=self._guard_data_edit(on_save))
         self.page.show_dialog(dialog)
 
     def _on_edit_board_desc(self, board: Board):
@@ -655,7 +697,7 @@ class CmdBoxApp:
                 self._refresh_sidebar()
                 self._refresh_board_desc()
 
-        dialog = BoardDialog("编辑板块", board=board, on_save=on_save)
+        dialog = BoardDialog("编辑板块", board=board, on_save=self._guard_data_edit(on_save))
         self.page.show_dialog(dialog)
 
     def _refresh_board_desc(self):
@@ -698,12 +740,14 @@ class CmdBoxApp:
         dialog = ConfirmDialog(
             "确认删除",
             f"确定要删除板块「{board.name}」吗？该板块下的所有指令也会被删除。",
-            on_confirm=on_confirm
+            on_confirm=self._guard_data_edit(on_confirm)
         )
         self.page.show_dialog(dialog)
 
     def _on_reorder_boards(self, board_ids: list):
         """处理板块拖拽重排序"""
+        if not self._can_edit_data():
+            return
         self.data_service.reorder_boards(board_ids)
         self._refresh_sidebar()
 
@@ -723,7 +767,7 @@ class CmdBoxApp:
                 is_favorite=kwargs.get("is_favorite", False)
             )
             self.data_service.add_command(command)
-            self.search_bar.update_tags(self._get_all_tags())
+            self._refresh_search_tags()
             self._refresh_commands()
 
         dialog = CommandDialog(
@@ -731,7 +775,7 @@ class CmdBoxApp:
             boards=self.data_service.boards,
             selected_board_id=self.selected_board_id,
             existing_tags=self._get_all_tags(),
-            on_save=on_save
+            on_save=self._guard_data_edit(on_save)
         )
         self.page.show_dialog(dialog)
 
@@ -784,7 +828,7 @@ class CmdBoxApp:
                 is_favorite=kwargs.get("is_favorite", False)
             )
             self.data_service.update_command(command)
-            self.search_bar.update_tags(self._get_all_tags())
+            self._refresh_search_tags()
             self._refresh_commands()
 
         dialog = CommandDialog(
@@ -792,7 +836,7 @@ class CmdBoxApp:
             boards=self.data_service.boards,
             command=command,
             existing_tags=self._get_all_tags(),
-            on_save=on_save
+            on_save=self._guard_data_edit(on_save)
         )
         self.page.show_dialog(dialog)
 
@@ -800,25 +844,27 @@ class CmdBoxApp:
         """删除指令"""
         def on_confirm():
             self.data_service.delete_command(command.id)
-            self.search_bar.update_tags(self._get_all_tags())
+            self._refresh_search_tags()
             self._refresh_commands()
 
         dialog = ConfirmDialog(
             "确认删除",
             f"确定要删除指令「{command.title}」吗？",
-            on_confirm=on_confirm
+            on_confirm=self._guard_data_edit(on_confirm)
         )
         self.page.show_dialog(dialog)
 
     def _on_toggle_favorite(self, command: Command):
         """切换收藏"""
+        if not self._can_edit_data():
+            return
         command.update(is_favorite=not command.is_favorite)
         self.data_service.update_command(command)
         self._refresh_commands()
 
     def _on_move_up(self, command: Command):
         """上移指令"""
-        if self._is_moving:
+        if not self._can_edit_data() or self._is_moving:
             return
         self._is_moving = True
         try:
@@ -831,7 +877,7 @@ class CmdBoxApp:
 
     def _on_move_down(self, command: Command):
         """下移指令"""
-        if self._is_moving:
+        if not self._can_edit_data() or self._is_moving:
             return
         self._is_moving = True
         try:
@@ -863,6 +909,7 @@ class CmdBoxApp:
         """刷新任务列表"""
         if tasks is None:
             tasks = self.data_service.search_tasks(self.search_keyword)
+        self.task_list.empty_filtered = bool(self.search_keyword)
         self.task_list.update_tasks(tasks)
 
     def _on_fab_click(self, e):
@@ -884,7 +931,7 @@ class CmdBoxApp:
                 self._refresh_tasks()
                 self._refresh_status_counts()
 
-        dialog = TaskDialog("新建任务", on_save=on_save)
+        dialog = TaskDialog("新建任务", on_save=self._guard_data_edit(on_save))
         self.page.show_dialog(dialog)
 
     def _on_edit_task(self, task: Task):
@@ -895,7 +942,7 @@ class CmdBoxApp:
                 self.data_service.update_task(task)
                 self._refresh_tasks()
 
-        dialog = TaskDialog("编辑任务", task=task, on_save=on_save)
+        dialog = TaskDialog("编辑任务", task=task, on_save=self._guard_data_edit(on_save))
         self.page.show_dialog(dialog)
 
     def _on_delete_task(self, task: Task):
@@ -908,12 +955,14 @@ class CmdBoxApp:
         dialog = ConfirmDialog(
             "确认删除",
             f"确定要删除任务「{task.title}」吗？",
-            on_confirm=on_confirm
+            on_confirm=self._guard_data_edit(on_confirm)
         )
         self.page.show_dialog(dialog)
 
     def _on_toggle_task_complete(self, task: Task):
         """切换任务完成状态"""
+        if not self._can_edit_data():
+            return
         task.update(completed=not task.completed)
         if task.completed:
             task.update(in_progress=False)
@@ -923,7 +972,7 @@ class CmdBoxApp:
 
     def _on_toggle_task_in_progress(self, task: Task):
         """切换任务执行中状态"""
-        if task.completed:
+        if not self._can_edit_data() or task.completed:
             return
         task.update(in_progress=not task.in_progress)
         self.data_service.update_task(task)
@@ -940,7 +989,7 @@ class CmdBoxApp:
         dialog = ConfirmDialog(
             "确认清除",
             f"确定要清除 {completed_count} 个已完成的任务吗？",
-            on_confirm=on_confirm
+            on_confirm=self._guard_data_edit(on_confirm)
         )
         self.page.show_dialog(dialog)
 
@@ -950,6 +999,7 @@ class CmdBoxApp:
         """刷新问题列表"""
         if questions is None:
             questions = self.data_service.search_questions(self.search_keyword)
+        self.question_list.empty_filtered = bool(self.search_keyword)
         self.question_list.update_questions(questions)
 
     def _on_add_question(self):
@@ -961,7 +1011,7 @@ class CmdBoxApp:
                 self._refresh_questions()
                 self._refresh_status_counts()
 
-        dialog = QuestionDialog("新建问题", on_save=on_save)
+        dialog = QuestionDialog("新建问题", on_save=self._guard_data_edit(on_save))
         self.page.show_dialog(dialog)
 
     def _on_edit_question(self, question: Question):
@@ -972,7 +1022,7 @@ class CmdBoxApp:
                 self.data_service.update_question(question)
                 self._refresh_questions()
 
-        dialog = QuestionDialog("编辑问题", question=question, on_save=on_save)
+        dialog = QuestionDialog("编辑问题", question=question, on_save=self._guard_data_edit(on_save))
         self.page.show_dialog(dialog)
 
     def _on_delete_question(self, question: Question):
@@ -985,12 +1035,14 @@ class CmdBoxApp:
         dialog = ConfirmDialog(
             "确认删除",
             f"确定要删除问题「{question.title}」吗？",
-            on_confirm=on_confirm
+            on_confirm=self._guard_data_edit(on_confirm)
         )
         self.page.show_dialog(dialog)
 
     def _on_toggle_question_asked(self, question: Question):
         """切换问题询问状态"""
+        if not self._can_edit_data():
+            return
         question.update(asked=not question.asked)
         self.data_service.update_question(question)
         self._refresh_questions()
@@ -1007,7 +1059,7 @@ class CmdBoxApp:
         dialog = ConfirmDialog(
             "确认清除",
             f"确定要清除 {asked_count} 个已询问的问题吗？",
-            on_confirm=on_confirm
+            on_confirm=self._guard_data_edit(on_confirm)
         )
         self.page.show_dialog(dialog)
 
@@ -1170,9 +1222,11 @@ class CmdBoxApp:
         async def on_restore(backup_path: str):
             """从备份恢复数据"""
             import asyncio
-            if getattr(self, '_syncing', False):
+            if not self._can_edit_data():
                 return False
             self._syncing = True
+            self.search_bar.cancel_pending_search()
+            self._set_edit_controls_disabled(True)
             try:
                 await asyncio.to_thread(self.data_service.restore_backup, backup_path)
             except (OSError, ValueError, KeyError, TypeError) as error:
@@ -1180,6 +1234,7 @@ class CmdBoxApp:
                 return False
             finally:
                 self._syncing = False
+                self._set_edit_controls_disabled(False)
             # 刷新界面
             self.selected_board_id = self.FAVORITES_BOARD_ID
             self.show_favorites_only = True
@@ -1209,9 +1264,9 @@ class CmdBoxApp:
             repo_path=self.config_service.get("repo_path"),
             remote_url=current_remote_url,
             data_service=self.data_service,
-            on_save=on_save,
+            on_save=self._guard_data_edit(on_save),
             on_restore=on_restore,
-            on_path_save=on_path_save,
+            on_path_save=self._guard_data_edit(on_path_save),
             latest_version=latest_version
         )
         self.page.show_dialog(dialog)

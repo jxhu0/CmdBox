@@ -30,8 +30,12 @@ class GitRemoteSettingsTests(unittest.TestCase):
                 service.cleanup()
 
     def test_settings_clear_uses_actual_result_including_failure(self):
-        app = Mock()
-        app._syncing = False
+        app = CmdBoxApp.__new__(CmdBoxApp)
+        app._syncing = app._closing = False
+        app.data_service = Mock(records_generation=0)
+        app.config_service = Mock()
+        app.config_service.get_latest_version.return_value = None
+        app.git_service, app.page, app._show_snack_bar = Mock(), Mock(), Mock()
         for result in [(True, '远程地址已清除'), (False, '无法修改 Git 配置')]:
             with self.subTest(result=result), patch('app.SettingsDialog') as dialog:
                 app.git_service.set_remote_url.return_value = result

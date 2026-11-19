@@ -34,6 +34,9 @@ class ConfigService:
             if not isinstance(data, dict) or not isinstance(data.get('repo_path', ''), str):
                 raise ValueError('配置格式无效')
             self.config = {**self.DEFAULT_CONFIG, **data}
+            for key, default in {**self.DEFAULT_CONFIG, 'latest_version': ''}.items():
+                if not isinstance(self.config.get(key, default), str):
+                    self.config[key] = default
         except (ValueError, TypeError):
             # 留下原文件供恢复，重新显示初始化向导。
             from shutil import copy2

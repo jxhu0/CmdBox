@@ -1,6 +1,7 @@
 # views/question_list.py
 import flet as ft
 from views.isolated import IsolatedControl
+from views.list_helpers import empty_state, sort_bar, scroll_to_top
 from typing import List, Callable
 from models.question import Question
 from views.question_card import QuestionCard
@@ -37,6 +38,7 @@ class QuestionList(IsolatedControl, ft.ListView):
         self.on_clear_asked = on_clear_asked
         self.questions: List[Question] = []
         self._query_ids = ()
+        self.empty_filtered = False
         self._card_cache = {}
         self._visible_limit = 20
         self._page_start = 0
@@ -51,6 +53,7 @@ class QuestionList(IsolatedControl, ft.ListView):
         """根据当前排序模式排序问题"""
         mode = SORT_MODES[self.sort_mode_index][0]
         questions = list(self.questions)
+        questions.sort(key=lambda q: q.created_at or '', reverse=True)
         if mode == "priority":
             questions.sort(key=lambda q: PRIORITY_ORDER.get(q.priority, 1))
         elif mode == "time":
@@ -61,30 +64,7 @@ class QuestionList(IsolatedControl, ft.ListView):
         return questions
 
     def _build_sort_bar(self) -> ft.Control:
-        """直接选择排序方式，并标记当前选项。"""
-        _, icon, tooltip = SORT_MODES[self.sort_mode_index]
-        return ft.Container(
-            content=ft.Row([
-                ft.Container(expand=True),
-                ft.PopupMenuButton(
-                    content=ft.Row([
-                        ft.Icon(icon, size=16, color=ft.Colors.GREY_500),
-                        ft.Text(tooltip, size=12, color=ft.Colors.GREY_700),
-                        ft.Icon(ft.Icons.ARROW_DROP_DOWN, size=16),
-                    ], spacing=4, tight=True),
-                    tooltip="选择排序方式",
-                    items=[
-                        ft.PopupMenuItem(
-                            content=label,
-                            checked=index == self.sort_mode_index,
-                            on_click=lambda e, index=index: self._select_sort_mode(index),
-                        )
-                        for index, (_, _, label) in enumerate(SORT_MODES)
-                    ],
-                ),
-            ], spacing=0, tight=True),
-            padding=ft.padding.only(right=4, top=2),
-        )
+        return sort_bar(SORT_MODES, self.sort_mode_index, self._select_sort_mode)
 
     def _select_sort_mode(self, index):
         if index == self.sort_mode_index:
@@ -93,19 +73,10 @@ class QuestionList(IsolatedControl, ft.ListView):
         self._page_start = 0
         self.controls = self._build_question_cards()
         self.update()
+        scroll_to_top(self)
 
     def _build_empty_state(self) -> List[ft.Control]:
-        return [
-            ft.Container(
-                content=ft.Column([
-                    ft.Icon(ft.Icons.HELP_OUTLINE, size=48, color=ft.Colors.GREY_400),
-                    ft.Text("暂无问题", color=ft.Colors.GREY_500),
-                    ft.Text("点击下方按钮添加第一个问题", size=12, color=ft.Colors.GREY_400),
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, tight=True),
-                alignment=ft.Alignment(0.5, 0.5),
-                expand=True
-            )
-        ]
+        return empty_state('问题', ft.Icons.HELP_OUTLINE, self.empty_filtered)
 
     def _build_question_card(self, question: Question) -> QuestionCard:
         snapshot = (id(question), question.to_dict())
@@ -215,8 +186,10 @@ class QuestionList(IsolatedControl, ft.ListView):
         self._page_start += self._visible_limit
         self.controls = self._build_question_cards()
         self.update()
+        scroll_to_top(self)
 
     def _previous_page(self, e):
         self._page_start = max(0, self._page_start - self._visible_limit)
         self.controls = self._build_question_cards()
         self.update()
+        scroll_to_top(self)

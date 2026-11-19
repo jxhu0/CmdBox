@@ -42,7 +42,7 @@ class UpdateDialog(ft.AlertDialog):
                 border_radius=12,
                 border=ft.border.all(1, ft.Colors.BLUE_100)
             )
-        ], tight=True, spacing=0)
+        ], tight=True, spacing=0, scroll=ft.ScrollMode.AUTO, width=460)
 
         self.actions = [
             ft.TextButton(
@@ -76,7 +76,8 @@ class UpdateDialog(ft.AlertDialog):
 
     def _on_remind_later(self, e):
         if self.on_remind_later:
-            self.on_remind_later()
+            if self.on_remind_later() is False:
+                return
         if self.page:
             self.page.pop_dialog()
             self.page.update()

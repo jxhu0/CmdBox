@@ -12,6 +12,7 @@ from models.board import Board
 from models.task import Task
 from models.question import Question
 from services.data_service import DataService
+from services.search_runner import SearchRunner
 from views.question_card import QuestionCard
 from views.question_list import QuestionList
 from views.search_bar import SearchBar
@@ -64,6 +65,30 @@ class SearchAndPagingTests(unittest.TestCase):
         with patch.object(search.search_input, 'update'):
             asyncio.run(search.clear_search())
         callback.assert_called_with('', None, None)
+
+    def test_time_sort_also_orders_running_tasks_and_priority_ties_are_newest_first(self):
+        older, newer = Task.create('older'), Task.create('newer')
+        older.created_at, newer.created_at = '2026-01-01', '2026-01-02'
+        older.in_progress = newer.in_progress = True
+        view = TaskList(*([Mock()] * 5))
+        view.tasks = [older, newer]
+        for mode in (0, 1, 2):
+            view.sort_mode_index = mode
+            self.assertEqual(view._get_sorted_tasks(), [newer, older])
+
+    def test_filtered_empty_state_changes_back_when_filter_is_cleared(self):
+        from views.command_list import CommandList
+        cases = [(CommandList({}, *([Mock()] * 5)), 'update_commands', '指令'),
+                 (TaskList(*([Mock()] * 5)), 'update_tasks', '任务'),
+                 (QuestionList(*([Mock()] * 4)), 'update_questions', '问题')]
+        for view, method, noun in cases:
+            with self.subTest(noun=noun), patch.object(view, 'update'):
+                view.empty_filtered = True
+                getattr(view, method)([])
+                self.assertEqual(view.controls[0].content.controls[1].value, f'没有匹配的{noun}')
+                view.empty_filtered = False
+                getattr(view, method)([])
+                self.assertEqual(view.controls[0].content.controls[1].value, f'暂无{noun}')
 
     def test_long_answers_can_expand_without_rebuilding_other_cards(self):
         question = Question.create('问题', answer='很长的解答' * 100)
@@ -147,6 +172,8 @@ class AsyncSearchTests(unittest.IsolatedAsyncioTestCase):
         app.search_keyword = ''
         app.search_bar = Mock(_search_generation=1)
         app.data_service = Mock(revision=0)
+        app._search_runner = SearchRunner()
+        self.addCleanup(app._search_runner.close)
         app._refresh_commands = Mock()
         app._refresh_tasks = Mock()
         app._refresh_questions = Mock()

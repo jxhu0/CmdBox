@@ -1,8 +1,8 @@
 # CmdBox
 
-![](https://img.shields.io/badge/version-v1.4.4-blue)
+![](https://img.shields.io/badge/version-v1.5.0-blue)
 ![](https://img.shields.io/badge/license-MIT-green)
-![](https://img.shields.io/badge/last_update-2026--11--18-orange)
+![](https://img.shields.io/badge/last_update-2026--11--19-orange)
 
 一款用于保存和管理命令行指令及大模型 Prompt 的桌面应用。
 
@@ -49,9 +49,11 @@
 ### 搜索与数据恢复
 
 - 搜索在后台执行，输入后自动搜索，也可回车立即搜索或点击清空按钮
+- 连续输入仅保留最新的待执行搜索；跨板块复用缓存，并限制缓存容量
 - 窄窗口自动收窄侧边栏，板块管理操作收进菜单；较长的问题解答可按需展开
 - 设置中恢复备份前会确认并校验文件，成功后刷新界面；恢复前也会备份当前数据
 - 检测到其他窗口或程序修改数据文件时，停止覆盖；退出时会把本窗口尚未保存的修改另存为 `data_local_*.json` 备份
+- 自动备份保留最近 10 份；冲突时的本地副本单独保留，可在设置中手动恢复，确认后手动清理
 - 数据损坏且没有有效备份时显示恢复提示，不会自动用空数据覆盖原文件
 
 ## 开发
@@ -91,7 +93,7 @@ pyinstaller --name CmdBox --windowed --onefile --icon assets/icon.ico --add-data
 - GitPython (Git 操作)
 - pyperclip (剪贴板)
 - requests (HTTP 请求)
-- tkinter (文件对话框)
+- Flet FilePicker (原生异步文件对话框)
 
 ## 项目结构
 
