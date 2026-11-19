@@ -1,6 +1,7 @@
 # services/git_service.py
 import gc
 import json
+import os
 from typing import Optional, Tuple
 from pathlib import Path
 from datetime import datetime
@@ -8,6 +9,7 @@ from datetime import datetime
 
 class GitService:
     """Git 同步服务"""
+    NETWORK_TIMEOUT = 45
 
     def __init__(self, repo_path: str):
         self.repo_path = Path(repo_path)
@@ -47,7 +49,8 @@ class GitService:
         """初始化 Git 仓库"""
         try:
             self.repo_path.mkdir(parents=True, exist_ok=True)
-            self.git.Repo.init(self.repo_path, initial_branch="main")
+            with self.git.Repo.init(self.repo_path, initial_branch="main"):
+                pass
             return True
         except Exception as e:
             print(f"Init repo error: {e}")
@@ -85,6 +88,43 @@ class GitService:
         except Exception as e:
             return False, f"提交失败: {e}"
 
+    def _network_environment(self):
+        environment = {
+            'GIT_TERMINAL_PROMPT': '0', 'GCM_INTERACTIVE': 'Never',
+        }
+        # 保留用户选择的 SSH 客户端、密钥及 core.sshCommand。
+        if not os.environ.get('GIT_SSH_COMMAND') and not os.environ.get('GIT_SSH'):
+            try:
+                configured = self._get_repo().git.config('--get', 'core.sshCommand')
+            except self.git.GitCommandError:
+                configured = None
+            if not configured:
+                environment['GIT_SSH_COMMAND'] = 'ssh -oBatchMode=yes -oConnectTimeout=15'
+        return environment
+
+    def _target_branch(self, repo):
+        """优先使用 origin 的跟踪分支，其次远程 HEAD，兼容 main/master。"""
+        if not repo.head.is_detached:
+            tracking = repo.active_branch.tracking_branch()
+            if tracking is not None and tracking.remote_name == 'origin':
+                return tracking.remote_head
+        try:
+            return repo.remotes.origin.refs.HEAD.reference.remote_head
+        except (AttributeError, ValueError):
+            pass
+        branches = [ref.remote_head for ref in repo.remotes.origin.refs if ref.remote_head != 'HEAD']
+        if len(branches) == 1:
+            return branches[0]
+        # 没有跟踪信息时读取远程默认分支；这不会拉取或改变本地数据。
+        with repo.git.custom_environment(**self._network_environment()):
+            info = repo.git.ls_remote('--symref', 'origin', 'HEAD', kill_after_timeout=self.NETWORK_TIMEOUT)
+        for line in info.splitlines():
+            if line.startswith('ref: refs/heads/') and line.endswith('\tHEAD'):
+                return line.split('\t')[0].removeprefix('ref: refs/heads/')
+        if not branches:
+            return 'main'
+        raise ValueError('无法确定远程数据分支，请配置当前分支的 origin 跟踪关系')
+
     def pull(self) -> Tuple[bool, str]:
         """拉取远程更改；冲突时中止合并，保留两端原始数据。"""
         try:
@@ -93,21 +133,23 @@ class GitService:
                 return False, "未配置远程仓库"
 
             origin = repo.remotes.origin
-            target_branch = "main"
 
             # 尝试获取远程分支信息
             try:
-                origin.fetch()
+                with repo.git.custom_environment(**self._network_environment()):
+                    origin.fetch(prune=True, kill_after_timeout=self.NETWORK_TIMEOUT)
             except Exception as e:
                 error_msg = str(e)
-                if "Could not connect" in error_msg or "Connection" in error_msg or "timed out" in error_msg.lower():
-                    return False, f"网络连接失败，请检查网络后重试"
+                if any(word in error_msg.lower() for word in ('connect', 'timed out', 'timeout')):
+                    return False, "网络连接失败或超时，请检查网络后重试"
                 return False, f"获取远程信息失败: {error_msg}"
 
-            # 检查远程是否有 main 分支
+            target_branch = self._target_branch(repo)
             remote_branch = f"origin/{target_branch}"
             if remote_branch not in [ref.name for ref in origin.refs]:
-                return True, "远程没有 main 分支，无可拉取的数据"
+                if not [ref for ref in origin.refs if ref.remote_head != 'HEAD']:
+                    return True, "远程仓库为空，无可拉取的数据"
+                return False, f'远程分支 {target_branch} 不存在，请检查分支配置'
 
             # 不自动提交用户尚未处理的合并。
             merge_head_path = Path(repo.git_dir) / "MERGE_HEAD"
@@ -185,14 +227,18 @@ class GitService:
             if not self.has_remote():
                 return False, "未配置远程仓库"
 
-            target_branch = "main"
+            target_branch = self._target_branch(repo)
 
             # 普通推送会拒绝覆盖远程的新提交；上传不隐式拉取或强制覆盖。
-            repo.git.push("--set-upstream", "origin", f"HEAD:{target_branch}")
+            with repo.git.custom_environment(**self._network_environment()):
+                repo.git.push("--set-upstream", "origin", f"HEAD:{target_branch}",
+                              kill_after_timeout=self.NETWORK_TIMEOUT)
 
             return True, "推送成功"
         except Exception as e:
             error_msg = str(e)
+            if any(word in error_msg.lower() for word in ('timed out', 'timeout')):
+                return False, '上传连接超时，本地数据已保留；请检查网络后重试'
             if any(reason in error_msg.lower() for reason in ("non-fast-forward", "fetch first", "[rejected]")):
                 return False, "远程有尚未拉取的改动，请先点击“拉取数据”，成功后再上传"
             return False, f"推送失败: {error_msg}"
@@ -238,6 +284,7 @@ class GitService:
             try:
                 # 编辑操作已排队保存；不要用可能过期的内存再次覆盖磁盘。
                 data_service.flush()
+                data_service.assert_current()
                 data_service.backup()
             except Exception as e:
                 return False, f"操作前保存或备份失败: {e}"

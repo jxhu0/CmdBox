@@ -44,6 +44,7 @@ class Sidebar(IsolatedControl, ft.Container):
         self.questions_board_id = questions_board_id
         self.pending_task_count = pending_task_count
         self.pending_question_count = pending_question_count
+        self.compact = False
 
         self.width = 180
         self.bgcolor = ft.Colors.WHITE
@@ -59,6 +60,7 @@ class Sidebar(IsolatedControl, ft.Container):
         card_content = ft.Row([
             create_icon_widget(board.icon, 16),
             ft.Text(board.name, size=13, weight=ft.FontWeight.W_600 if is_selected else ft.FontWeight.NORMAL,
+                    expand=True, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS,
                     color=ft.Colors.BLUE_700 if is_selected else ft.Colors.GREY_700),
             ft.Row([
                 ft.IconButton(
@@ -73,11 +75,20 @@ class Sidebar(IsolatedControl, ft.Container):
                     tooltip="删除板块",
                     on_click=lambda e, bid=board.id: self.on_delete_board(bid)
                 )
-            ], spacing=0)
+            ], spacing=0, visible=not self.compact),
+            ft.PopupMenuButton(
+                icon=ft.Icons.MORE_VERT, icon_size=14, visible=self.compact,
+                tooltip=f'管理板块：{board.name}',
+                items=[
+                    ft.PopupMenuItem(content='编辑板块', on_click=lambda e: self.on_edit_board(board.id)),
+                    ft.PopupMenuItem(content='删除板块', on_click=lambda e: self.on_delete_board(board.id)),
+                ])
         ], spacing=4, vertical_alignment=ft.CrossAxisAlignment.CENTER)
+        card_content.controls[1].visible = not self.compact
 
         return BoardItem(
             key=board.id,
+            tooltip=board.name,
             content=ft.ReorderableDragHandle(
                 content=ft.Container(
                     content=card_content,
@@ -232,7 +243,23 @@ class Sidebar(IsolatedControl, ft.Container):
         # 新建按钮在底部
         content_items.append(add_btn)
 
+        for item, label in [(tasks_item, '任务'), (questions_item, '问题'), (fav_item, '收藏')]:
+            if item is not None:
+                item.tooltip = label
+                item.content.controls[2].visible = not self.compact
+                item.padding = 8 if self.compact else 14
+        add_btn.content.tooltip = '新建板块'
+        add_btn.content.content.controls[1].visible = not self.compact
+
         return ft.Column(content_items, tight=False, expand=True)
+
+    def set_compact(self, compact):
+        if self.compact == compact:
+            return
+        self.compact = compact
+        self.width = 96 if compact else 180
+        self.content = self._build_content()
+        self.update()
 
     def select_board(self, board_id: str):
         """Change selection without rebuilding icons, buttons or drag handles."""

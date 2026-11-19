@@ -67,13 +67,17 @@ class QuestionCard(IsolatedControl, ft.Container):
             )
 
         if question.answer:
-            text_controls.append(
-                ft.Text(
-                    "\U0001f4ac " + question.answer,
-                    size=12,
-                    color=ft.Colors.GREY_400 if question.asked else ft.Colors.BLUE_400,
-                )
-            )
+            self._answer_expanded = False
+            self._answer_text = ft.Text(
+                "\U0001f4ac " + question.answer, size=12, max_lines=6,
+                overflow=ft.TextOverflow.ELLIPSIS,
+                color=ft.Colors.GREY_400 if question.asked else ft.Colors.BLUE_400)
+            text_controls.append(self._answer_text)
+            if len(question.answer) > 120 or question.answer.count('\n') >= 6:
+                self._answer_toggle = ft.TextButton('展开解答', on_click=self._toggle_answer)
+                text_controls.append(self._answer_toggle)
+            else:
+                self._answer_text.max_lines = None
 
         # 底部行：时间戳
         bottom_controls = []
@@ -139,3 +143,9 @@ class QuestionCard(IsolatedControl, ft.Container):
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             vertical_alignment=ft.CrossAxisAlignment.CENTER
         )
+
+    def _toggle_answer(self, e):
+        self._answer_expanded = not self._answer_expanded
+        self._answer_text.max_lines = None if self._answer_expanded else 6
+        self._answer_toggle.content = '收起解答' if self._answer_expanded else '展开解答'
+        self.update()

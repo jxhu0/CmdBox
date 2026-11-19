@@ -17,9 +17,10 @@ class ExportDialog(ft.AlertDialog):
         self.title = ft.Text("导出指令")
 
         # 导出范围
+        self.current_scope = ft.Radio(value="current", label="当前板块的所有指令")
         self.scope_group = ft.RadioGroup(
             content=ft.Column([
-                ft.Radio(value="current", label="当前板块的所有指令"),
+                self.current_scope,
                 ft.Radio(value="all", label="所有板块的所有指令"),
             ])
         )
@@ -72,14 +73,16 @@ class ExportDialog(ft.AlertDialog):
         self.update()
 
     def _on_cancel(self, e):
-        self.open = False
-        self.update()
+        self.page.pop_dialog()
 
-    def _on_export(self, e):
+    async def _on_export(self, e):
+        filename = (self.filename_field.value or '').strip()
+        if not filename or filename in ('.', '..'):
+            self.filename_field.error = '请输入有效文件名'
+            self.update()
+            return
+        self.page.pop_dialog()
         if self.on_export_callback:
             scope = self.scope_group.value
             fmt = self.format_group.value
-            filename = self.filename_field.value
-            self.on_export_callback(scope, fmt, filename)
-        self.open = False
-        self.update()
+            await self.on_export_callback(scope, fmt, filename)

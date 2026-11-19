@@ -36,6 +36,7 @@ class QuestionList(IsolatedControl, ft.ListView):
         self.on_add_question = on_add_question
         self.on_clear_asked = on_clear_asked
         self.questions: List[Question] = []
+        self._query_ids = ()
         self._card_cache = {}
         self._visible_limit = 20
         self._page_start = 0
@@ -89,6 +90,7 @@ class QuestionList(IsolatedControl, ft.ListView):
         if index == self.sort_mode_index:
             return
         self.sort_mode_index = index
+        self._page_start = 0
         self.controls = self._build_question_cards()
         self.update()
 
@@ -201,8 +203,10 @@ class QuestionList(IsolatedControl, ft.ListView):
     def update_questions(self, questions: List[Question]):
         active_ids = {question.id for question in questions}
         self._card_cache = {key: value for key, value in self._card_cache.items() if key in active_ids}
-        if tuple(q.id for q in questions) != tuple(q.id for q in self.questions):
+        ids = tuple(question.id for question in questions)
+        if ids != self._query_ids:
             self._page_start = 0
+            self._query_ids = ids
         self.questions = questions
         self.controls = self._build_question_cards()
         self.update()

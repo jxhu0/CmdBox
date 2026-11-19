@@ -1,47 +1,8 @@
 # views/setup_wizard.py
 import flet as ft
-import subprocess
-import platform
+from services.file_dialog_service import choose_directory
 from pathlib import Path
 from typing import Callable
-
-
-def _browse_folder(initial_dir: str) -> str:
-    """跨平台选择文件夹"""
-    system = platform.system()
-
-    if system == "Darwin":  # macOS
-        escaped_path = initial_dir.replace('"', '\\"')
-        script = f'''
-set targetFolder to POSIX file "{escaped_path}"
-set chosen to choose folder with prompt "选择数据存储文件夹" default location targetFolder
-return POSIX path of chosen
-'''
-        try:
-            result = subprocess.run(
-                ["osascript", "-e", script],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                return result.stdout.strip()
-        except (subprocess.TimeoutExpired, Exception):
-            pass
-        return ""
-
-    else:  # Windows / Linux - 使用 tkinter
-        import tkinter as tk
-        from tkinter import filedialog
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes('-topmost', True)
-        root.update()
-        try:
-            folder = filedialog.askdirectory(initialdir=initial_dir)
-        finally:
-            root.destroy()
-        return folder if folder else ""
 
 
 def create_setup_wizard(page: ft.Page, on_complete: Callable[[str], None]) -> ft.Container:
@@ -51,8 +12,13 @@ def create_setup_wizard(page: ft.Page, on_complete: Callable[[str], None]) -> ft
     def on_path_change(e):
         path_data["path"] = e.control.value
 
-    def on_browse(e):
-        folder = _browse_folder(path_data["path"])
+    async def on_browse(e):
+        try:
+            folder = await choose_directory(page, path_data["path"])
+        except Exception as error:
+            path_input.error = f'无法选择目录：{error}'
+            path_input.update()
+            return
         if folder:
             path_input.value = folder
             path_input.update()

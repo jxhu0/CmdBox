@@ -5,14 +5,15 @@ import os
 import sys
 import flet as ft
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List
 from datetime import datetime, timedelta, timezone
 
 from services.config_service import ConfigService
-from services.data_service import DataService
+from services.data_service import DataService, ExternalDataChangeError
 from services.git_service import GitService
 from services.clipboard_service import ClipboardService
 from services.update_service import UpdateService
+from services.file_dialog_service import choose_export_path
 from models.board import Board
 from models.command import Command
 from models.task import Task
@@ -79,6 +80,7 @@ class CmdBoxApp:
         self.page.theme_mode = ft.ThemeMode.LIGHT
         self.page.window.prevent_close = True
         self.page.window.on_event = self._on_window_event
+        self.page.on_resize = self._on_page_resize
 
         # 根据操作系统设置字体
         import platform
@@ -103,15 +105,17 @@ class CmdBoxApp:
         if self._closing:
             return
         if getattr(self, '_syncing', False):
-            self._show_snack_bar('请等待上传或拉取完成后退出')
+            self._show_snack_bar('请等待当前数据操作完成后退出')
             return
         import asyncio
         self._closing = True
+        self._set_edit_controls_disabled(True)
         try:
             if self.data_service:
                 await asyncio.to_thread(self.data_service.close)
         except OSError as error:
             self._closing = False
+            self._set_edit_controls_disabled(False)
             self._show_snack_bar(str(error), 10000)
             return
         if self.git_service:
@@ -119,6 +123,16 @@ class CmdBoxApp:
         if self._recurring_check_task:
             self._recurring_check_task.cancel()
         await self._close_window()
+
+    def _on_page_resize(self, event):
+        if not hasattr(self, 'sidebar_container'):
+            return
+        compact = event.width < 760
+        self.sidebar.set_compact(compact)
+        width = 104 if compact else 200
+        if self.sidebar_container.width != width:
+            self.sidebar_container.width = width
+            self.sidebar_container.update()
 
     async def _close_window(self):
         """保存、清理完成后退出，避开旧版 Flet 在 Windows 的 destroy 延迟。"""
@@ -139,21 +153,15 @@ class CmdBoxApp:
 
     def _on_setup_complete(self, repo_path: str):
         """设置向导完成"""
-        # 初始化配置
-        self.config_service.init(repo_path)
-
-        # 初始化 Git 仓库
         self.git_service = GitService(repo_path)
-        self.git_service.init_repo()
-
-        # 初始化数据服务
-        self.data_service = DataService(repo_path)
-        self.data_service.load()
-        self.data_service.enable_background_saves(self._on_save_error)
-
-        # 初始提交
-        self.git_service.commit("初始化数据")
-
+        if not self.git_service.is_repo() and not self.git_service.init_repo():
+            self._show_snack_bar('无法初始化数据目录，请检查路径与写入权限', 8000)
+            return
+        try:
+            self.config_service.init(repo_path)
+        except OSError as error:
+            self._show_snack_bar(f'配置保存失败：{error}', 8000)
+            return
         self._init_app()
 
     def _init_app(self):
@@ -162,8 +170,21 @@ class CmdBoxApp:
 
         # 初始化服务
         self.git_service = GitService(repo_path)
-        self.data_service = DataService(repo_path)
-        self.data_service.load()
+        try:
+            self.data_service = DataService(repo_path)
+            self.data_service.load()
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            self.page.clean()
+            self.page.add(ft.Container(content=ft.Column([
+                ft.Icon(ft.Icons.ERROR_OUTLINE, size=40, color=ft.Colors.ORANGE),
+                ft.Text('无法加载数据', size=20, weight=ft.FontWeight.BOLD),
+                ft.Text(str(error), selectable=True),
+                ft.Text(f'数据目录：{repo_path}', selectable=True),
+                ft.TextButton('重试', on_click=lambda e: self._init_app()),
+                ft.TextButton('选择其他数据目录', on_click=lambda e: self._show_setup_wizard()),
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, tight=True),
+                alignment=ft.Alignment(0, 0), expand=True))
+            return
         self.data_service.enable_background_saves(self._on_save_error)
 
         # 重置过期的周期性任务
@@ -232,7 +253,10 @@ class CmdBoxApp:
 
     def _on_save_error(self, error):
         async def notify():
-            self._show_snack_bar(f'保存失败，请重试或检查数据目录：{error}', 10000)
+            if isinstance(error, ExternalDataChangeError):
+                self._show_snack_bar('检测到外部数据更新。请关闭后重新打开应用；本窗口的修改会在退出时另存为本地备份', 15000)
+            else:
+                self._show_snack_bar(f'保存失败，请重试或检查数据目录：{error}', 10000)
         self.page.run_task(notify)
 
     def _check_for_updates(self):
@@ -433,8 +457,9 @@ class CmdBoxApp:
         ], expand=True, spacing=0)
 
         # 布局（侧边栏宽度减小）
+        self.sidebar_container = ft.Container(content=self.sidebar, width=200)
         layout = ft.Row([
-            ft.Container(content=self.sidebar, width=200),
+            self.sidebar_container,
             ft.VerticalDivider(width=1),
             ft.Container(content=main_content, expand=True)
         ], expand=True)
@@ -451,8 +476,10 @@ class CmdBoxApp:
         # 加载初始数据
         self._refresh_commands()
         self._refresh_sidebar()
+        if isinstance(self.page.width, (int, float)):
+            self._on_page_resize(self.page)
 
-    def _refresh_commands(self):
+    def _refresh_commands(self, commands=None):
         """刷新指令列表"""
         if self.selected_board_id in (self.TASKS_BOARD_ID, self.QUESTIONS_BOARD_ID):
             return
@@ -468,9 +495,9 @@ class CmdBoxApp:
         self._command_views[self.selected_board_id] = view
         self.command_list = view
         view.boards = {board.id: board for board in self.data_service.boards}
-        commands = self.data_service.search_commands(
-            self.search_keyword, self.search_board_ids, self.search_tag
-        )
+        if commands is None:
+            commands = self.data_service.search_commands(
+                self.search_keyword, self.search_board_ids, self.search_tag)
         if self.show_favorites_only:
             commands = [command for command in commands if command.is_favorite]
             self.command_list.set_show_move_buttons(False)
@@ -553,19 +580,33 @@ class CmdBoxApp:
         self.sidebar.select_board(board_id)
         self._refresh_board_desc()
 
-    def _on_search(self, keyword: str, board_ids: Optional[List[str]], tag: Optional[str] = None):
-        """搜索"""
-        if getattr(self, '_syncing', False):
-            return
-        self.search_keyword = keyword
-        self.search_board_ids = board_ids
-        self.search_tag = tag
-        if self.selected_board_id == self.TASKS_BOARD_ID:
-            self._refresh_tasks()
-        elif self.selected_board_id == self.QUESTIONS_BOARD_ID:
-            self._refresh_questions()
+    async def _on_search(self, keyword: str, board_ids: Optional[List[str]], tag: Optional[str] = None):
+        """后台搜索；输入、页面或数据版本变化时，不显示过期结果。"""
+        import asyncio
+        selected = self.selected_board_id
+        generation = self.search_bar._search_generation
+        while True:
+            if getattr(self, '_syncing', False) or getattr(self, '_closing', False):
+                return
+            revision = self.data_service.revision
+            if selected == self.TASKS_BOARD_ID:
+                results = await asyncio.to_thread(self.data_service.search_tasks, keyword)
+            elif selected == self.QUESTIONS_BOARD_ID:
+                results = await asyncio.to_thread(self.data_service.search_questions, keyword)
+            else:
+                results = await asyncio.to_thread(self.data_service.search_commands, keyword, board_ids, tag)
+            if (generation != self.search_bar._search_generation or selected != self.selected_board_id
+                    or getattr(self, '_syncing', False) or getattr(self, '_closing', False)):
+                return
+            if revision == self.data_service.revision:
+                break
+        self.search_keyword, self.search_board_ids, self.search_tag = keyword, board_ids, tag
+        if selected == self.TASKS_BOARD_ID:
+            self._refresh_tasks(results)
+        elif selected == self.QUESTIONS_BOARD_ID:
+            self._refresh_questions(results)
         else:
-            self._refresh_commands()
+            self._refresh_commands(results)
 
     def _get_all_tags(self) -> List[str]:
         """获取所有已使用的标签"""
@@ -669,9 +710,7 @@ class CmdBoxApp:
     def _on_add_command(self):
         """添加指令"""
         if not self.data_service.boards:
-            self.page.snack_bar = ft.SnackBar(ft.Text("请先创建板块"))
-            self.page.snack_bar.open = True
-            self.page.update()
+            self._show_snack_bar('请先创建板块')
             return
 
         def on_save(**kwargs):
@@ -820,12 +859,10 @@ class CmdBoxApp:
         self.question_list_container.visible = True
         self._refresh_questions()
 
-    def _refresh_tasks(self):
+    def _refresh_tasks(self, tasks=None):
         """刷新任务列表"""
-        tasks = self.data_service.tasks
-        if self.search_keyword:
-            keyword = self.search_keyword.lower()
-            tasks = [t for t in tasks if keyword in t.title.lower() or keyword in t.description.lower()]
+        if tasks is None:
+            tasks = self.data_service.search_tasks(self.search_keyword)
         self.task_list.update_tasks(tasks)
 
     def _on_fab_click(self, e):
@@ -909,12 +946,10 @@ class CmdBoxApp:
 
     # ==================== 问题相关 ====================
 
-    def _refresh_questions(self):
+    def _refresh_questions(self, questions=None):
         """刷新问题列表"""
-        questions = self.data_service.questions
-        if self.search_keyword:
-            keyword = self.search_keyword.lower()
-            questions = [q for q in questions if keyword in q.title.lower() or keyword in q.description.lower() or keyword in q.answer.lower()]
+        if questions is None:
+            questions = self.data_service.search_questions(self.search_keyword)
         self.question_list.update_questions(questions)
 
     def _on_add_question(self):
@@ -982,18 +1017,24 @@ class CmdBoxApp:
     async def _on_pull_data(self, e):
         await self._run_data_transfer(upload=False)
 
+    def _set_edit_controls_disabled(self, disabled):
+        names = ('sidebar', 'command_stack', 'task_list', 'question_list', 'add_btn',
+                 'search_bar', 'board_desc_container', 'upload_btn', 'pull_btn')
+        controls = [getattr(self, name) for name in names if hasattr(self, name)]
+        for control in controls:
+            control.disabled = disabled
+        if controls:
+            self.page.update(*controls)
+        return controls
+
     async def _run_data_transfer(self, upload: bool):
         """上传与拉取独立执行，并共享忙碌状态和错误处理。"""
         import asyncio
         if getattr(self, '_syncing', False) or getattr(self, '_closing', False):
             return
         self._syncing = True
-        edit_controls = [self.sidebar, self.command_stack, self.task_list,
-                         self.question_list, self.add_btn, self.search_bar,
-                         self.board_desc_container, self.upload_btn, self.pull_btn]
-        for control in edit_controls:
-            control.disabled = True
-        self.page.update(*edit_controls)
+        self.search_bar.cancel_pending_search()
+        self._set_edit_controls_disabled(True)
         syncing_snack = None
         action = "上传" if upload else "拉取"
         try:
@@ -1007,7 +1048,7 @@ class CmdBoxApp:
                     ft.ProgressRing(width=16, height=16, stroke_width=2, color=ft.Colors.WHITE),
                     ft.Text(f"正在{action}数据...", size=14)
                 ], spacing=10),
-                duration=60000
+                duration=180000
             )
             self.page.overlay.append(syncing_snack)
             syncing_snack.open = True
@@ -1050,92 +1091,50 @@ class CmdBoxApp:
             self._show_snack_bar(f"{action}失败: {str(ex)}", 8000)
         finally:
             self._syncing = False
-            for control in edit_controls:
-                control.disabled = False
-            self.page.update(*edit_controls)
+            self._set_edit_controls_disabled(False)
 
     def _on_export_click(self, e):
         """点击导出按钮"""
-        if self.export_dialog not in self.page.overlay:
-            self.page.overlay.append(self.export_dialog)
-        self.export_dialog.open = True
-        self.page.update()
+        self.export_dialog.current_scope.disabled = self.selected_board_id in (
+            self.TASKS_BOARD_ID, self.QUESTIONS_BOARD_ID)
+        if self.export_dialog.current_scope.disabled:
+            self.export_dialog.scope_group.value = 'all'
+        self.page.show_dialog(self.export_dialog)
 
-    def _on_export_confirmed(self, scope: str, fmt: str, filename: str):
-        """确认导出"""
-        # 确定板块 ID 和计数方式
-        is_favorites = (self.selected_board_id == self.FAVORITES_BOARD_ID)
-
-        if scope == "current":
-            if is_favorites:
-                # 收藏板块：导出收藏的指令
-                commands = [c for c in self.data_service.commands if c.is_favorite]
-                data = self.data_service.export_commands_list(commands, fmt)
-                count = len(commands)
-            else:
-                board_id = self.selected_board_id
-                data = self.data_service.export_commands(board_id=board_id, format=fmt)
-                count = len([c for c in self.data_service.commands if c.board_id == board_id])
-        else:
-            # 所有板块
-            data = self.data_service.export_commands(board_id=None, format=fmt)
-            count = len(self.data_service.commands)
-
-        # 添加文件扩展名
-        ext = ".json" if fmt == "json" else ".csv"
-        if not filename.endswith(ext):
-            filename += ext
-
-        # 使用跨平台文件保存对话框
-        import threading
-        import platform
-
-        result = [None]  # 用于在线程间传递结果
-
-        def run_dialog():
-            system = platform.system()
-            if system == "Darwin":  # macOS
-                import subprocess
-                script = f'''
-set thePath to POSIX path of (choose file name default name "{filename}" with prompt "保存导出文件")
-'''
-                try:
-                    proc = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
-                    result[0] = proc.stdout.strip() if proc.returncode == 0 else None
-                except:
-                    result[0] = None
-            else:  # Windows / Linux
-                import tkinter as tk
-                from tkinter import filedialog
-                root = tk.Tk()
-                root.withdraw()
-                root.attributes('-topmost', True)
-                root.update()
-                try:
-                    ext = ".json" if fmt == "json" else ".csv"
-                    path = filedialog.asksaveasfilename(
-                        initialfile=filename,
-                        defaultextension=ext,
-                        filetypes=[("JSON files", "*.json"), ("CSV files", "*.csv"), ("All files", "*.*")]
-                    )
-                    result[0] = path if path else None
-                finally:
-                    root.destroy()
-
-        # 在新线程中运行对话框
-        thread = threading.Thread(target=run_dialog)
-        thread.start()
-        thread.join()  # 等待用户选择
-        path = result[0]
-
-        if path:
-            try:
-                with open(path, "w", encoding="utf-8") as f:
-                    f.write(data)
-                self._show_snack_bar(f"导出成功，共 {count} 条指令")
-            except Exception as ex:
-                self._show_snack_bar(f"导出失败：{str(ex)}")
-        self.page.update()
+    async def _on_export_confirmed(self, scope: str, fmt: str, filename: str):
+        """选择路径和写文件均异步执行，导出点击时的数据快照。"""
+        import asyncio
+        from dataclasses import replace
+        if getattr(self, '_exporting', False):
+            return
+        self._exporting = True
+        try:
+            commands = self.data_service.commands
+            if scope == 'current':
+                if self.selected_board_id == self.FAVORITES_BOARD_ID:
+                    commands = [c for c in commands if c.is_favorite]
+                elif self.selected_board_id in (self.TASKS_BOARD_ID, self.QUESTIONS_BOARD_ID):
+                    self._show_snack_bar('任务和问题板块没有指令，请选择“所有板块”导出')
+                    return
+                else:
+                    commands = [c for c in commands if c.board_id == self.selected_board_id]
+            commands = [replace(c, tags=list(c.tags)) for c in commands]
+            board_names = {b.id: b.name for b in self.data_service.boards}
+            filename = Path(filename or 'cmdbox_export').name
+            ext = f'.{fmt}'
+            if not filename.lower().endswith(ext):
+                filename += ext
+            path = await choose_export_path(self.page, filename, fmt)
+            if not path:
+                return
+            data = await asyncio.to_thread(
+                self.data_service.export_commands_list, commands, fmt, board_names)
+            await asyncio.to_thread(Path(path).write_text, data, encoding='utf-8')
+            self._show_snack_bar(f'导出成功，共 {len(commands)} 条指令')
+        except Exception as error:
+            self._show_snack_bar(f'导出失败：{error}', 8000)
+        finally:
+            self._exporting = False
 
     def _show_snack_bar(self, message: str, duration: int = 4000):
         """显示 SnackBar
@@ -1166,31 +1165,40 @@ set thePath to POSIX path of (choose file name default name "{filename}" with pr
                 self._show_snack_bar(msg)
             else:
                 self._show_snack_bar(f"设置失败: {msg}")
+            return success
 
-        def on_restore(backup_path: str):
+        async def on_restore(backup_path: str):
             """从备份恢复数据"""
-            import shutil
-            self.data_service.flush()
-            # 备份当前数据
-            current_backup = self.data_service.data_file.with_suffix(".json.bak")
-            shutil.copy2(self.data_service.data_file, current_backup)
-            # 复制备份文件
-            shutil.copy2(backup_path, self.data_service.data_file)
-            # 重新加载数据
-            self.data_service.load()
+            import asyncio
+            if getattr(self, '_syncing', False):
+                return False
+            self._syncing = True
+            try:
+                await asyncio.to_thread(self.data_service.restore_backup, backup_path)
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                self._show_snack_bar(f'恢复失败：{error}', 8000)
+                return False
+            finally:
+                self._syncing = False
             # 刷新界面
             self.selected_board_id = self.FAVORITES_BOARD_ID
             self.show_favorites_only = True
             self.search_keyword, self.search_board_ids, self.search_tag = '', None, None
             self._build_ui()
             self._show_snack_bar("数据已恢复（已备份当前数据）")
+            return True
 
         def on_path_save(new_path: str):
             """保存新的数据存储路径"""
             old_path = self.config_service.get("repo_path")
             if new_path != old_path:
-                self.config_service.set("repo_path", new_path)
-                self._show_snack_bar("数据存储路径已更改，请重启应用生效")
+                try:
+                    self.config_service.set("repo_path", new_path)
+                except OSError as error:
+                    self._show_snack_bar(f'路径保存失败：{error}', 8000)
+                    return False
+                self._show_snack_bar("数据存储路径已更改，关闭并重新打开应用后生效")
+            return True
 
         # 后台启动检查已缓存版本，打开设置不等待网络
         latest_version = self.config_service.get_latest_version()

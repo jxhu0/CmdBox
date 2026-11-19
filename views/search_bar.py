@@ -24,10 +24,21 @@ class SearchBar(IsolatedControl, ft.Container):
         self.tags = tags
         self.on_search = on_search
         self._search_generation = 0
+        self._pending_search = None
         self._context = 'commands'
+        self._narrow = False
 
         self.padding = 8
         self.content = self._build_content()
+        self.on_size_change = self._on_width_changed
+
+    def _on_width_changed(self, event):
+        narrow = event.width < 560
+        if narrow == self._narrow:
+            return
+        self._narrow = narrow
+        self.board_dropdown.width = self.tag_dropdown.width = 100 if narrow else 130
+        self.filters.update()
 
     def _build_content(self) -> ft.Row:
         # 搜索输入框
@@ -35,6 +46,9 @@ class SearchBar(IsolatedControl, ft.Container):
             hint_text="搜索指令...",
             prefix_icon=ft.Icons.SEARCH,
             on_change=self._on_search_change,
+            on_submit=self._on_submit,
+            suffix=ft.IconButton(icon=ft.Icons.CLOSE, icon_size=16,
+                                 tooltip='清空搜索', on_click=self._on_clear_click),
             expand=True,
             text_size=13,
             bgcolor=ft.Colors.WHITE,
@@ -99,27 +113,42 @@ class SearchBar(IsolatedControl, ft.Container):
         self.update()
 
     def _on_search_change(self, e):
+        self.cancel_pending_search()
+        self._pending_search = self.page.run_task(self._debounced_search, self._search_generation)
+
+    def cancel_pending_search(self):
         self._search_generation += 1
-        self.page.run_task(self._debounced_search, self._search_generation)
+        if self._pending_search is not None:
+            self._pending_search.cancel()
+            self._pending_search = None
+
+    async def _on_submit(self, e):
+        self.cancel_pending_search()
+        await self._run_search()
 
     async def _debounced_search(self, generation):
         await asyncio.sleep(0.2)
         if generation == self._search_generation:
-            self._do_search()
+            await self._run_search()
 
-    def _on_board_change(self, e):
-        self._search_generation += 1
-        self._do_search()
+    async def _on_board_change(self, e):
+        self.cancel_pending_search()
+        await self._run_search()
 
-    def _on_tag_change(self, e):
-        self._search_generation += 1
-        self._do_search()
+    async def _on_tag_change(self, e):
+        self.cancel_pending_search()
+        await self._run_search()
+
+    async def _run_search(self):
+        import inspect
+        result = self._do_search()
+        if inspect.isawaitable(result):
+            await result
 
     def _do_search(self):
         keyword = self.search_input.value or ""
         if self._context != 'commands':
-            self.on_search(keyword, None, None)
-            return
+            return self.on_search(keyword, None, None)
         board_value = self.board_dropdown.value
         tag_value = self.tag_dropdown.value
 
@@ -133,7 +162,7 @@ class SearchBar(IsolatedControl, ft.Container):
         else:
             selected_tag = tag_value
 
-        self.on_search(keyword, board_ids, selected_tag)
+        return self.on_search(keyword, board_ids, selected_tag)
 
     def update_boards(self, boards: List[Board]):
         self.boards = boards
@@ -160,15 +189,19 @@ class SearchBar(IsolatedControl, ft.Container):
         self.tag_dropdown.update()
 
     def reset_filters(self, board_id=None):
-        self._search_generation += 1
+        self.cancel_pending_search()
         self.search_input.value = ''
         self.board_dropdown.value = board_id or 'all'
         self.tag_dropdown.value = 'all'
         self.update()
 
-    def clear_search(self):
+    async def _on_clear_click(self, e):
+        await self.clear_search()
+
+    async def clear_search(self):
         """清空搜索框内容"""
-        self._search_generation += 1
+        self.cancel_pending_search()
         if hasattr(self, 'search_input') and self.search_input.value:
             self.search_input.value = ""
             self.search_input.update()
+            await self._run_search()

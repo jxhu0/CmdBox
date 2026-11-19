@@ -38,6 +38,7 @@ class TaskList(IsolatedControl, ft.ListView):
         self.on_add_task = on_add_task
         self.on_clear_completed = on_clear_completed
         self.tasks: List[Task] = []
+        self._query_ids = ()
         self._card_cache = {}
         self._visible_limit = 20
         self._page_start = 0
@@ -97,6 +98,7 @@ class TaskList(IsolatedControl, ft.ListView):
         if index == self.sort_mode_index:
             return
         self.sort_mode_index = index
+        self._page_start = 0
         self.controls = self._build_task_cards()
         self.update()
 
@@ -211,8 +213,10 @@ class TaskList(IsolatedControl, ft.ListView):
     def update_tasks(self, tasks: List[Task]):
         active_ids = {task.id for task in tasks}
         self._card_cache = {key: value for key, value in self._card_cache.items() if key in active_ids}
-        if tuple(t.id for t in tasks) != tuple(t.id for t in self.tasks):
+        ids = tuple(task.id for task in tasks)
+        if ids != self._query_ids:
             self._page_start = 0
+            self._query_ids = ids
         self.tasks = tasks
         self.controls = self._build_task_cards()
         self.update()

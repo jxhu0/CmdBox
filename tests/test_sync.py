@@ -1,10 +1,11 @@
 import asyncio
 import json
+import os
 from pathlib import Path
 import tempfile
 import threading
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from git import Repo
 
@@ -223,6 +224,53 @@ class SyncTests(unittest.TestCase):
         self.assertEqual(self.local.active_branch.name, 'work')
         self.assertEqual(self.remote.commit('main').hexsha, self.local.head.commit.hexsha)
 
+    def test_pull_and_upload_follow_existing_master_branch(self):
+        self.local.git.push('origin', 'HEAD:master')
+        self.remote.git.symbolic_ref('HEAD', 'refs/heads/master')
+        self.local.git.push('origin', '--delete', 'main')
+        self.local.git.fetch('--prune')
+        self.local.git.branch('-m', 'master')
+        self.local.git.branch('--set-upstream-to=origin/master', 'master')
+        other_data = DataService(self.other.working_tree_dir)
+        other_data.load()
+        task = Task.create('master 分支上的远程任务')
+        other_data.add_task(task)
+        self.other.git.add('data.json')
+        self.other.index.commit('更新 master 数据')
+        self.other.git.push('origin', 'HEAD:master')
+        success, message = self.git.pull_data(self.data)
+        self.assertTrue(success, message)
+        self.assertEqual(self.data.tasks[0].id, task.id)
+        self.data.add_task(Task.create('本地更新'))
+        success, message = self.git.upload_data(self.data)
+        self.assertTrue(success, message)
+        self.assertEqual(self.remote.commit('master').hexsha, self.local.head.commit.hexsha)
+        self.assertNotIn('main', [head.name for head in self.remote.heads])
+
+    def test_remote_documents_with_invalid_field_types_are_rejected(self):
+        self.publish_command()
+        self.assertTrue(self.git.pull_data(self.data)[0])
+        before = self.data.data_file.read_bytes()
+        document = json.loads(before)
+        document['commands'][0]['title'] = None
+        path = Path(self.other.working_tree_dir) / 'data.json'
+        path.write_text(json.dumps(document), encoding='utf-8')
+        self.other.git.add('data.json')
+        self.other.index.commit('无效字段')
+        self.other.git.push('origin', 'main')
+        success, message = self.git.pull_data(self.data)
+        self.assertFalse(success)
+        self.assertIn('校验', message)
+        self.assertEqual(self.data.data_file.read_bytes(), before)
+
+    def test_network_environment_keeps_custom_ssh_configuration(self):
+        with self.local.config_writer() as config:
+            config.set_value('core', 'sshCommand', 'ssh -i custom-key')
+        with patch.dict(os.environ, {'GIT_SSH_COMMAND': '', 'GIT_SSH': ''}):
+            self.assertNotIn('GIT_SSH_COMMAND', self.git._network_environment())
+        with patch.dict(os.environ, {'GIT_SSH_COMMAND': 'custom-ssh-client'}):
+            self.assertNotIn('GIT_SSH_COMMAND', self.git._network_environment())
+
     def test_existing_merge_is_not_automatically_committed(self):
         self.publish_command()
         self.data.add_command(Command.create(self.data.boards[0].id, '本地新增', 'echo local'))
@@ -339,3 +387,33 @@ class SyncUiTests(unittest.IsolatedAsyncioTestCase):
         app._syncing = True
         app._on_edit_board_desc(Mock())
         app.page.show_dialog.assert_not_called()
+
+
+class NetworkDeadlineTests(unittest.TestCase):
+    def make_service(self):
+        service = GitService('.')
+        repo = MagicMock()
+        service._get_repo = Mock(return_value=repo)
+        service.has_remote = Mock(return_value=True)
+        service._target_branch = Mock(return_value='main')
+        return service, repo
+
+    def test_push_has_deadline_and_never_opens_interactive_prompt(self):
+        service, repo = self.make_service()
+        repo.git.push.side_effect = OSError('Timeout: command did not finish')
+        success, message = service.push()
+        self.assertFalse(success)
+        self.assertIn('超时', message)
+        repo.git.push.assert_called_once_with('--set-upstream', 'origin', 'HEAD:main',
+                                              kill_after_timeout=service.NETWORK_TIMEOUT)
+        environment = repo.git.custom_environment.call_args.kwargs
+        self.assertEqual(environment['GIT_TERMINAL_PROMPT'], '0')
+        self.assertEqual(environment['GCM_INTERACTIVE'], 'Never')
+
+    def test_fetch_has_deadline_and_prunes_stale_branches(self):
+        service, repo = self.make_service()
+        repo.remotes.origin.fetch.side_effect = OSError('Timeout')
+        success, message = service.pull()
+        self.assertFalse(success)
+        self.assertIn('超时', message)
+        repo.remotes.origin.fetch.assert_called_once_with(prune=True, kill_after_timeout=service.NETWORK_TIMEOUT)

@@ -1,14 +1,13 @@
 # views/dialogs.py
 import flet as ft
+from services.file_dialog_service import choose_directory
 from views.isolated import IsolatedControl
-import subprocess
-import platform
 from typing import List, Optional, Callable
 from models.board import Board
 from models.command import Command
 from models.task import Task
 from models.question import Question
-from utils.helpers import is_image_icon, create_icon_widget
+from utils.helpers import create_icon_widget
 
 
 class DialogBody(IsolatedControl, ft.Column):
@@ -27,44 +26,6 @@ def _validate_required(dialog, fields):
     if not valid:
         dialog.update()
     return valid
-
-
-def _browse_folder(initial_dir: str) -> Optional[str]:
-    """跨平台选择文件夹"""
-    system = platform.system()
-
-    if system == "Darwin":  # macOS
-        escaped_path = initial_dir.replace('"', '\\"')
-        script = f'''
-set targetFolder to POSIX file "{escaped_path}"
-set chosen to choose folder with prompt "选择数据存储文件夹" default location targetFolder
-return POSIX path of chosen
-'''
-        try:
-            result = subprocess.run(
-                ["osascript", "-e", script],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                return result.stdout.strip()
-        except (subprocess.TimeoutExpired, Exception):
-            pass
-        return None
-
-    else:  # Windows / Linux - 使用 tkinter
-        import tkinter as tk
-        from tkinter import filedialog
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes('-topmost', True)
-        root.update()
-        try:
-            folder = filedialog.askdirectory(initialdir=initial_dir)
-        finally:
-            root.destroy()
-        return folder if folder else None
 
 
 # 预设图标列表
@@ -573,9 +534,14 @@ class SettingsDialog(ft.AlertDialog):
         import webbrowser
         webbrowser.open("https://github.com/jxhu0/CmdBox/releases")
 
-    def _on_browse(self, e):
+    async def _on_browse(self, e):
         """浏览选择新路径"""
-        folder = _browse_folder(self.path_data["path"])
+        try:
+            folder = await choose_directory(self.page, self.path_data["path"])
+        except Exception as error:
+            self.path_field.error = f'无法选择目录：{error}'
+            self.path_field.update()
+            return
         if folder:
             self.path_field.value = folder
             self.path_field.update()
@@ -658,10 +624,24 @@ class SettingsDialog(ft.AlertDialog):
 
     def _on_restore(self, backup_path: str):
         """恢复备份"""
-        if self.on_restore_callback:
-            self.on_restore_callback(backup_path)
-        if self.page:
-            self.page.pop_dialog()
+        page = self.page
+
+        async def restore(e):
+            import inspect
+            page.pop_dialog()
+            if self.on_restore_callback:
+                result = self.on_restore_callback(backup_path)
+                if inspect.isawaitable(result):
+                    result = await result
+                if result is False:
+                    return
+            page.pop_dialog()
+
+        page.show_dialog(ft.AlertDialog(
+            modal=True, title=ft.Text('确认恢复备份'),
+            content=ft.Text('恢复后会替换当前数据，操作前会自动备份当前数据。确定继续吗？'),
+            actions=[ft.TextButton('取消', on_click=lambda e: page.pop_dialog()),
+                     ft.TextButton('恢复', on_click=restore)]))
 
     def _on_cancel(self, e):
         if self.page:
@@ -670,9 +650,11 @@ class SettingsDialog(ft.AlertDialog):
     def _on_save(self, e):
         new_path = self.path_data["path"].strip()
         if self.on_save_callback:
-            self.on_save_callback(self.remote_field.value)
+            if self.on_save_callback(self.remote_field.value) is False:
+                return
         if self.on_path_save_callback and new_path:
-            self.on_path_save_callback(new_path)
+            if self.on_path_save_callback(new_path) is False:
+                return
         if self.page:
             self.page.pop_dialog()
 

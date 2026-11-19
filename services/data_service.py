@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 import copy
+import hashlib
 import tempfile
 import threading
 import time
@@ -14,6 +15,13 @@ from models.board import Board
 from models.command import Command
 from models.task import Task
 from models.question import Question
+from services.data_schema import parse_data
+from services.search_index import SearchIndex
+from services.file_lock import data_file_lock
+
+
+class ExternalDataChangeError(OSError):
+    """当前内存版本落后于磁盘版本，不能覆盖写入。"""
 
 
 class DataService:
@@ -22,11 +30,14 @@ class DataService:
     def __init__(self, data_path: str):
         self.data_path = Path(data_path)
         self.data_file = self.data_path / "data.json"
+        self._file_version = self._disk_version()
+        self._file_digest = None
         self.backup_dir = self.data_path / "backups"
         self.boards: List[Board] = []
         self.commands: List[Command] = []
         self.tasks: List[Task] = []
         self.questions: List[Question] = []
+        self.revision = 0
         self._save_lock = threading.Lock()
         self._save_ready = threading.Condition(self._save_lock)
         self._save_generation = 0
@@ -38,6 +49,11 @@ class DataService:
         self._save_error = None
         self._on_save_error = None
         self._snapshot_cache = {name: {} for name in ('boards', 'commands', 'tasks', 'questions')}
+        self._search_indexes = {
+            'commands': SearchIndex(('title', 'content', 'description', 'tags')),
+            'tasks': SearchIndex(('title', 'description')),
+            'questions': SearchIndex(('title', 'description', 'answer')),
+        }
 
     def enable_background_saves(self, on_error=None):
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='cmdbox-save')
@@ -56,15 +72,66 @@ class DataService:
             with self._save_ready:
                 self._flush_requested = False
         if self._save_error:
+            if isinstance(self._save_error, ExternalDataChangeError):
+                raise self._save_error
             raise OSError(f'保存数据失败: {self._save_error}') from self._save_error
 
     def close(self):
-        self.flush()
+        try:
+            self.flush()
+        except ExternalDataChangeError:
+            # 保留本窗口的未保存修改，让用户能正常退出后重新打开最新数据。
+            with self._save_lock:
+                snapshot = self._pending_save
+            if snapshot is None:
+                raise
+            self.backup_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S_%f')
+            draft = self.backup_dir / f'data_local_{timestamp}.json'
+            with draft.open('w', encoding='utf-8') as handle:
+                json.dump(snapshot, handle, ensure_ascii=False, indent=2)
+                handle.flush()
+                os.fsync(handle.fileno())
+            with self._save_lock:
+                self._pending_save = None
+                self._save_error = None
         if self._executor:
             self._executor.shutdown(wait=True)
             self._executor = None
 
+    def _disk_version(self):
+        try:
+            stat = self.data_file.stat()
+            return stat.st_mtime_ns, stat.st_size, stat.st_ino
+        except FileNotFoundError:
+            return None
+
+    def assert_current(self):
+        if self._disk_version() != self._file_version:
+            # Git 中止合并可能重写内容完全相同的文件；只在确实有变化时拒绝。
+            if self._disk_digest() != self._file_digest:
+                raise ExternalDataChangeError('数据文件已被其他窗口或程序修改，已停止写入。请重新打开应用以加载最新数据')
+            self._file_version = self._disk_version()
+
+    def _disk_digest(self):
+        try:
+            return self._digest(self.data_file.read_bytes())
+        except FileNotFoundError:
+            return None
+
+    @staticmethod
+    def _digest(raw):
+        # Git 在 Windows 上可能把相同 JSON 的换行还原为 CRLF。
+        return hashlib.sha256(raw.replace(b'\r\n', b'\n')).digest()
+
     def _write_snapshot(self, data):
+        with data_file_lock(self.data_path):
+            self.assert_current()
+            self._write_snapshot_unlocked(data)
+            self._file_version = self._disk_version()
+            self._file_digest = self._disk_digest()
+
+    def _write_snapshot_unlocked(self, data):
         self.data_path.mkdir(parents=True, exist_ok=True)
         path = None
         try:
@@ -115,48 +182,63 @@ class DataService:
         """从文件加载数据"""
         self.flush()
         if not self.data_file.exists():
+            if self._file_version is not None:
+                raise ExternalDataChangeError('数据文件已被其他程序移除，请检查数据目录后重试')
             self._init_default_data()
             return
 
         try:
-            with open(self.data_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
+            with data_file_lock(self.data_path):
+                raw = self.data_file.read_bytes()
+                loaded_version = self._disk_version()
+                loaded_digest = self._digest(raw)
+            data = json.loads(raw)
         except (json.JSONDecodeError, ValueError):
+            previous_version = self._file_version
+            previous_digest = self._file_digest
+            self._file_version = loaded_version
+            self._file_digest = loaded_digest
             # JSON 损坏时尝试恢复最新备份
             restored = self._try_restore_from_backup()
-            if restored:
-                with open(self.data_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
+            if restored is not None:
+                data = restored
             else:
-                # 没有可用备份，备份损坏文件后重新初始化
+                # 保留损坏文件；不能把无法读取误判为一套全新的空数据。
                 self._backup_corrupted_file()
-                self._init_default_data()
-                return
+                self._file_version = previous_version
+                self._file_digest = previous_digest
+                raise ValueError('数据文件损坏且没有有效备份，请修复数据文件或选择其他数据目录')
+            loaded_version = self._file_version
+            loaded_digest = self._file_digest
 
         # 完整解析后再替换，避免某类数据加载失败造成内存处于半更新状态。
         records = self.parse_data(data)
+        self._file_version = loaded_version
+        self._file_digest = loaded_digest
+        self._apply_records(records)
+
+    def _apply_records(self, records):
+        self.revision += 1
         for name, items in records.items():
             setattr(self, name, items)
         self._snapshot_cache = {name: {} for name in self._snapshot_cache}
+        for index in self._search_indexes.values():
+            index.clear()
 
-    @staticmethod
-    def parse_data(data):
-        """解析数据但不写入；同步时也用它检查合并结果。"""
-        if not isinstance(data, dict):
-            raise ValueError('数据必须是 JSON 对象')
-        records = {}
-        for name, model in [('boards', Board), ('commands', Command), ('tasks', Task), ('questions', Question)]:
-            rows = data.get(name, [])
-            if not isinstance(rows, list):
-                raise ValueError(f'{name} 必须是列表')
-            records[name] = [model.from_dict(row) for row in rows]
-            ids = [item.id for item in records[name]]
-            if len(ids) != len(set(ids)):
-                raise ValueError(f'{name} 包含重复 ID')
-        return records
+    parse_data = staticmethod(parse_data)
+
+    def restore_backup(self, backup_path):
+        """先完整校验备份，再备份当前数据并原子替换，最后替换内存模型。"""
+        self.flush()
+        data = json.loads(Path(backup_path).read_text(encoding='utf-8'))
+        records = self.parse_data(data)
+        self.backup()
+        self._write_snapshot(data)
+        self._apply_records(records)
 
     def save(self):
         """保存数据到文件"""
+        self.revision += 1
         data = {}
         for name in self._snapshot_cache:
             previous = self._snapshot_cache[name]
@@ -235,20 +317,21 @@ class DataService:
         ]
         self.save()
 
-    def _try_restore_from_backup(self) -> bool:
+    def _try_restore_from_backup(self) -> Optional[dict]:
         """尝试从最新备份恢复，返回是否成功"""
         if not self.backup_dir.exists():
-            return False
+            return None
         backups = sorted(self.backup_dir.glob("data_*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
         for backup in backups:
             try:
                 with open(backup, "r", encoding="utf-8") as f:
-                    json.load(f)  # 验证 JSON 有效
-                shutil.copy2(backup, self.data_file)
-                return True
-            except (json.JSONDecodeError, ValueError):
+                    data = json.load(f)
+                self.parse_data(data)
+                self._write_snapshot(data)
+                return data
+            except (ValueError, KeyError, TypeError):
                 continue
-        return False
+        return None
 
     def _backup_corrupted_file(self):
         """将损坏的数据文件备份为 .corrupted 文件"""
@@ -275,7 +358,9 @@ class DataService:
         # 创建 ID 到板块的映射
         board_map = {b.id: b for b in self.boards}
         # 按新顺序重建列表
-        self.boards = [board_map[bid] for bid in board_ids if bid in board_map]
+        if len(board_ids) != len(set(board_ids)) or set(board_ids) != set(board_map):
+            raise ValueError('板块排序必须包含全部板块且不能重复')
+        self.boards = [board_map[bid] for bid in board_ids]
         self.save()
 
     def delete_board(self, board_id: str) -> int:
@@ -424,19 +509,18 @@ class DataService:
 
         # 按关键词过滤
         if keyword:
-            keyword = keyword.lower()
-            results = [
-                c for c in results
-                if keyword in c.title.lower()
-                or keyword in c.content.lower()
-                or (c.description and keyword in c.description.lower())
-                or any(keyword in t.lower() for t in c.tags)
-            ]
+            results = self._search_indexes['commands'].filter(results, keyword)
 
         # 有关键词或标签筛选时按更新时间降序排序
         if keyword or tag:
             results.sort(key=lambda c: c.updated_at or "", reverse=True)
         return results
+
+    def search_tasks(self, keyword=''):
+        return self._search_indexes['tasks'].filter(self.tasks, keyword)
+
+    def search_questions(self, keyword=''):
+        return self._search_indexes['questions'].filter(self.questions, keyword)
 
     def export_commands(self, board_id: Optional[str] = None, format: str = "json") -> str:
         """导出指令为 JSON 或 CSV 格式
@@ -507,7 +591,7 @@ class DataService:
 
         return output.getvalue()
 
-    def export_commands_list(self, commands: List[Command], format: str = "json") -> str:
+    def export_commands_list(self, commands: List[Command], format: str = "json", board_names=None) -> str:
         """直接导出一批指令（不通过 board_id 过滤）
 
         Args:
@@ -517,7 +601,7 @@ class DataService:
         Returns:
             序列化后的字符串
         """
-        board_names = {b.id: b.name for b in self.boards}
+        board_names = board_names if board_names is not None else {b.id: b.name for b in self.boards}
         if format == "json":
             return self._export_as_json(commands, board_names)
         else:
