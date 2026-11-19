@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, List
 import uuid
+from utils.timestamps import next_updated_at
 
 
 @dataclass
@@ -93,4 +94,4 @@ class Command:
             self.is_favorite = is_favorite
         if board_id is not None:
             self.board_id = board_id
-        self.updated_at = datetime.now().isoformat()
+        self.updated_at = next_updated_at(self.updated_at)

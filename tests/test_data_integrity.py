@@ -119,7 +119,7 @@ class DataIntegrityTests(unittest.TestCase):
 
     def test_git_crlf_checkout_is_not_misidentified_as_external_data_change(self):
         raw = self.service.data_file.read_bytes()
-        self.service.data_file.write_bytes(raw.replace(b'\n', b'\r\n'))
+        self.service.data_file.write_bytes(raw.replace(b'\r\n', b'\n').replace(b'\n', b'\r\n'))
         self.service.add_task(Task.create('Windows 换行后继续保存'))
         self.assertEqual(self.document()['tasks'][0]['title'], 'Windows 换行后继续保存')
 
@@ -127,8 +127,10 @@ class DataIntegrityTests(unittest.TestCase):
         self.service.backup_dir.mkdir()
         draft = self.service.backup_dir / 'data_local_old.json'
         draft.write_text(json.dumps(self.document()), encoding='utf-8')
-        for _ in range(12):
-            self.service.backup()
+        with patch('services.data_service.datetime') as clock:
+            clock.now.return_value.strftime.return_value = '2026-11-19_00-00-00_000000'
+            for _ in range(12):
+                self.service.backup()
         backups = self.service.get_backups()
         self.assertTrue(draft.exists())
         self.assertEqual(len([b for b in backups if not b['local_draft']]), 10)

@@ -7,6 +7,7 @@ import hashlib
 import tempfile
 import threading
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional
 from pathlib import Path
@@ -88,7 +89,7 @@ class DataService:
                 raise
             self.backup_dir.mkdir(parents=True, exist_ok=True)
             timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S_%f')
-            draft = self.backup_dir / f'data_local_{timestamp}.json'
+            draft = self.backup_dir / f'data_local_{timestamp}_{uuid.uuid4().hex}.json'
             with draft.open('w', encoding='utf-8') as handle:
                 json.dump(snapshot, handle, ensure_ascii=False, indent=2)
                 handle.flush()
@@ -137,7 +138,7 @@ class DataService:
         path = None
         try:
             with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=self.data_path,
-                                             prefix='.cmdbox-', suffix='.tmp', delete=False) as f:
+                                             prefix='.cmdbox-', suffix='.tmp', delete=False, newline='\n') as f:
                 path = f.name
                 json.dump(data, f, ensure_ascii=False, indent=2)
                 f.flush()
@@ -276,10 +277,11 @@ class DataService:
 
         # 生成带时间戳的备份文件名
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
-        backup_file = self.backup_dir / f"data_{timestamp}.json"
+        backup_file = self.backup_dir / f"data_{timestamp}_{uuid.uuid4().hex}.json"
 
         # 复制当前数据文件到备份目录
-        shutil.copy2(self.data_file, backup_file)
+        # 使用实际备份时间排序，而非复制源文件的旧修改时间。
+        shutil.copyfile(self.data_file, backup_file)
 
         # 清理旧备份，只保留最近10个
         self._cleanup_old_backups()

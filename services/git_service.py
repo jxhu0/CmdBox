@@ -2,6 +2,8 @@
 import gc
 import json
 import os
+import sys
+import subprocess
 from typing import Optional, Tuple
 from pathlib import Path
 from datetime import datetime
@@ -117,13 +119,38 @@ class GitService:
             return branches[0]
         # 没有跟踪信息时读取远程默认分支；这不会拉取或改变本地数据。
         with repo.git.custom_environment(**self._network_environment()):
-            info = repo.git.ls_remote('--symref', 'origin', 'HEAD', kill_after_timeout=self.NETWORK_TIMEOUT)
+            info = self._run_network_command(repo, 'ls_remote', '--symref', 'origin', 'HEAD')
         for line in info.splitlines():
             if line.startswith('ref: refs/heads/') and line.endswith('\tHEAD'):
                 return line.split('\t')[0].removeprefix('ref: refs/heads/')
         if not branches:
             return 'main'
         raise ValueError('无法确定远程数据分支，请配置当前分支的 origin 跟踪关系')
+
+    def _run_network_command(self, repo, command, *args):
+        """Windows 的 GitPython 不支持 execute(kill_after_timeout)，改用进程等待。"""
+        operation = getattr(repo.git, command)
+        if sys.platform != 'win32':
+            return operation(*args, kill_after_timeout=self.NETWORK_TIMEOUT)
+        process = operation(*args, as_process=True)
+        try:
+            stdout, stderr = process.communicate(timeout=self.NETWORK_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            # 同时终止 git 及其 SSH/认证子进程，避免子进程持有输出管道。
+            try:
+                subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'],
+                               capture_output=True, timeout=5,
+                               creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                process.proc.wait(timeout=5)
+            raise
+        if process.returncode:
+            raise self.git.GitCommandError(process.args, process.returncode, stderr, stdout)
+        return stdout.decode('utf-8', errors='replace') if isinstance(stdout, bytes) else stdout
 
     def pull(self) -> Tuple[bool, str]:
         """拉取远程更改；冲突时中止合并，保留两端原始数据。"""
@@ -231,8 +258,7 @@ class GitService:
 
             # 普通推送会拒绝覆盖远程的新提交；上传不隐式拉取或强制覆盖。
             with repo.git.custom_environment(**self._network_environment()):
-                repo.git.push("--set-upstream", "origin", f"HEAD:{target_branch}",
-                              kill_after_timeout=self.NETWORK_TIMEOUT)
+                self._run_network_command(repo, 'push', "--set-upstream", "origin", f"HEAD:{target_branch}")
 
             return True, "推送成功"
         except Exception as e:

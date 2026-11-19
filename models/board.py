@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 import uuid
+from utils.timestamps import next_updated_at
 
 
 @dataclass
@@ -59,4 +60,4 @@ class Board:
             self.icon = icon
         if description is not None:
             self.description = description
-        self.updated_at = datetime.now().isoformat()
+        self.updated_at = next_updated_at(self.updated_at)

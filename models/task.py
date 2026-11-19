@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 import uuid
+from utils.timestamps import next_updated_at
 
 # 北京时间 UTC+8
 _BJ_TZ = timezone(timedelta(hours=8))
@@ -99,4 +100,4 @@ class Task:
                 self.completed_at = datetime.now(_BJ_TZ).strftime("%Y-%m-%d %H:%M")
             else:
                 self.completed_at = ""
-        self.updated_at = datetime.now().isoformat()
+        self.updated_at = next_updated_at(self.updated_at)

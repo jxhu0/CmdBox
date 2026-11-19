@@ -1,6 +1,8 @@
 import asyncio
 import json
 import os
+import sys
+import subprocess
 from pathlib import Path
 import tempfile
 import threading
@@ -404,8 +406,8 @@ class NetworkDeadlineTests(unittest.TestCase):
         success, message = service.push()
         self.assertFalse(success)
         self.assertIn('超时', message)
-        repo.git.push.assert_called_once_with('--set-upstream', 'origin', 'HEAD:main',
-                                              kill_after_timeout=service.NETWORK_TIMEOUT)
+        expected = {'as_process': True} if sys.platform == 'win32' else {'kill_after_timeout': service.NETWORK_TIMEOUT}
+        repo.git.push.assert_called_once_with('--set-upstream', 'origin', 'HEAD:main', **expected)
         environment = repo.git.custom_environment.call_args.kwargs
         self.assertEqual(environment['GIT_TERMINAL_PROMPT'], '0')
         self.assertEqual(environment['GCM_INTERACTIVE'], 'Never')
@@ -417,3 +419,26 @@ class NetworkDeadlineTests(unittest.TestCase):
         self.assertFalse(success)
         self.assertIn('超时', message)
         repo.remotes.origin.fetch.assert_called_once_with(prune=True, kill_after_timeout=service.NETWORK_TIMEOUT)
+
+    def test_windows_network_command_uses_portable_communicate_timeout(self):
+        service, repo = self.make_service()
+        process = repo.git.push.return_value
+        process.communicate.return_value = (b'branch updated', b'')
+        process.returncode = 0
+        with patch('services.git_service.sys', Mock(platform='win32')):
+            self.assertEqual(service._run_network_command(repo, 'push', 'origin'), 'branch updated')
+        repo.git.push.assert_called_once_with('origin', as_process=True)
+        process.communicate.assert_called_once_with(timeout=service.NETWORK_TIMEOUT)
+
+    def test_windows_timeout_terminates_process_tree_and_reports_timeout(self):
+        service, repo = self.make_service()
+        process = repo.git.push.return_value
+        process.communicate.side_effect = subprocess.TimeoutExpired('git push', 45)
+        process.poll.return_value = None
+        with patch('services.git_service.sys', Mock(platform='win32')), \
+                patch('services.git_service.subprocess.run') as kill:
+            with self.assertRaises(subprocess.TimeoutExpired):
+                service._run_network_command(repo, 'push', 'origin')
+        self.assertEqual(kill.call_args.args[0], ['taskkill', '/PID', str(process.pid), '/T', '/F'])
+        process.kill.assert_called_once()
+        process.proc.wait.assert_called_once_with(timeout=5)
