@@ -304,16 +304,16 @@ class CmdBoxApp:
             )
         )
 
-        self.upload_btn = ft.TextButton(
-            "上传数据",
+        self.upload_btn = ft.IconButton(
             icon=ft.Icons.CLOUD_UPLOAD_OUTLINED,
-            tooltip="将本地改动上传到远程仓库",
+            icon_size=20,
+            tooltip="上传数据",
             on_click=self._on_upload_data
         )
-        self.pull_btn = ft.TextButton(
-            "拉取数据",
+        self.pull_btn = ft.IconButton(
             icon=ft.Icons.CLOUD_DOWNLOAD_OUTLINED,
-            tooltip="将远程改动拉取到本地",
+            icon_size=20,
+            tooltip="拉取数据",
             on_click=self._on_pull_data
         )
         self.header = ft.Container(
