@@ -51,31 +51,42 @@ class TaskCard(IsolatedControl, ft.Container):
         priority_label = PRIORITY_LABELS.get(task.priority, "中")
 
         # 左侧：checkbox + 标题 + 描述
-        title_and_desc_controls = [
-            ft.Text(
-                task.title,
-                size=15,
-                weight=ft.FontWeight.W_600,
-                color=ft.Colors.GREY_500 if task.completed else ft.Colors.GREY_800,
+        title = ft.Text(
+            task.title,
+            size=15,
+            weight=ft.FontWeight.W_600,
+            color=ft.Colors.GREY_500 if task.completed else ft.Colors.GREY_800,
+            expand=True,
+            expand_loose=True,
+            overflow=ft.TextOverflow.ELLIPSIS,
+            max_lines=1,
+            tooltip=task.title
+        )
+        text_content = title
+
+        if task.description:
+            description = ft.Text(
+                "· " + task.description,
+                size=13,
+                color=ft.Colors.GREY_500 if task.completed else ft.Colors.GREY_600,
                 expand=True,
                 expand_loose=True,
                 overflow=ft.TextOverflow.ELLIPSIS,
                 max_lines=1
-            ),
-        ]
-
-        if task.description:
-            title_and_desc_controls.append(
-                ft.Text(
-                    "· " + task.description,
-                    size=13,
-                    color=ft.Colors.GREY_500 if task.completed else ft.Colors.GREY_600,
-                    expand=True,
-                    expand_loose=True,
-                    overflow=ft.TextOverflow.ELLIPSIS,
-                    max_lines=1
-                )
             )
+            self._title_text = title
+            self._description_text = description
+            self._title_natural_width = None
+            self._text_available_width = None
+            # Row 中两个 Flexible 会平分空间。使用同字体的原生测量值，
+            # 先给标题自然宽度，再把剩余空间交给描述。
+            text_content = ft.Stack([
+                ft.Row([title, description], spacing=6, tight=True),
+                ft.Row([
+                    ft.Text(task.title, size=title.size, weight=title.weight,
+                            no_wrap=True, on_size_change=self._on_title_measured)
+                ], left=0, top=0, right=0, height=0, opacity=0),
+            ], expand=True, on_size_change=self._on_text_area_resized)
 
         left_row_controls = [
             ft.IconButton(
@@ -94,7 +105,7 @@ class TaskCard(IsolatedControl, ft.Container):
                 on_click=lambda e: self.on_toggle_in_progress(self.task),
                 style=ft.ButtonStyle(padding=0)
             ),
-            *title_and_desc_controls,
+            text_content,
         ]
         if task.completed and task.completed_at:
             completed_controls = [
@@ -145,3 +156,26 @@ class TaskCard(IsolatedControl, ft.Container):
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             vertical_alignment=ft.CrossAxisAlignment.CENTER
         )
+
+    def _on_title_measured(self, event):
+        self._title_natural_width = event.width
+        self._resize_inline_text()
+
+    def _on_text_area_resized(self, event):
+        self._text_available_width = event.width
+        self._resize_inline_text()
+
+    def _resize_inline_text(self):
+        if self._title_natural_width is None or self._text_available_width is None:
+            return
+        available = max(0, self._text_available_width)
+        width = min(self._title_natural_width, available)
+        show_description = self._title_natural_width + 6 < available
+        title, description = self._title_text, self._description_text
+        if title.width == width and description.visible == show_description:
+            return
+        title.expand = None
+        title.expand_loose = False
+        title.width = width
+        description.visible = show_description
+        self.update()

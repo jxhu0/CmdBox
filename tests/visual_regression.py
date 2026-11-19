@@ -19,14 +19,17 @@ async def main(page: ft.Page):
     page.window.height = 850
     noop = lambda *_: None
     tasks = TaskList(*([noop] * 5))
-    tasks.tasks = [Task.create('短任务'), Task.create('长标题' * 40, '说明' * 40)]
+    tasks.tasks = [Task.create('短任务'),
+                   Task.create('这是能完整放下的长标题测试', '短描述'),
+                   Task.create('短标题', '很长的说明' * 40),
+                   Task.create('长标题' * 40, '说明' * 40)]
     tasks.controls = tasks._build_task_cards()
     questions = QuestionList(*([noop] * 4))
     questions.questions = [Question.create('普通问题'),
                            Question.create('长解答', '问题描述', '解答内容需要换行。' * 35),
                            Question.create('下一张卡片')]
     questions.controls = questions._build_question_cards()
-    page.add(ft.Text('任务'), ft.Container(tasks, height=220), ft.Text('问题'),
+    page.add(ft.Text('任务'), ft.Container(tasks, height=300), ft.Text('问题'),
              ft.Container(questions, expand=True))
     for width in (700, 460):
         page.window.width = width
