@@ -27,18 +27,22 @@ class SearchBar(IsolatedControl, ft.Container):
         self._pending_search = None
         self._context = 'commands'
         self._narrow = False
+        self._compact = False
 
-        self.padding = 8
+        self.expand = True
+        self.padding = 0
         self.content = self._build_content()
         self.on_size_change = self._on_width_changed
 
     def _on_width_changed(self, event):
         narrow = event.width < 560
-        if narrow == self._narrow:
+        compact = event.width < 420
+        if (narrow, compact) == (self._narrow, self._compact):
             return
-        self._narrow = narrow
+        self._narrow, self._compact = narrow, compact
         self.board_dropdown.width = self.tag_dropdown.width = 100 if narrow else 130
-        self.filters.update()
+        self._set_filter_visibility()
+        self.update()
 
     def _build_content(self) -> ft.Row:
         # 搜索输入框
@@ -98,14 +102,45 @@ class SearchBar(IsolatedControl, ft.Container):
             self.board_dropdown,
             self.tag_dropdown,
         ], spacing=6)
+        self.filter_menu = ft.PopupMenuButton(
+            icon=ft.Icons.FILTER_ALT_OUTLINED, icon_size=20,
+            tooltip='筛选指令', visible=False)
+        self._build_filter_menu()
         return ft.Row([
             self.search_input,
             self.filters,
         ], spacing=6)
 
+    def _set_filter_visibility(self):
+        self.filters.visible = self._context == 'commands' and not self._compact
+        self.filter_menu.visible = self._context == 'commands' and self._compact
+        self.search_input.prefix_icon = self.filter_menu if self.filter_menu.visible else ft.Icons.SEARCH
+
+    def _build_filter_menu(self):
+        def select(field, value):
+            async def handler(e):
+                field.value = value
+                self._build_filter_menu()
+                self.update()
+                self.cancel_pending_search()
+                await self._run_search()
+            return handler
+
+        self.filter_menu.items = [
+            ft.PopupMenuItem(content=f'板块：{label}', checked=self.board_dropdown.value == value,
+                             on_click=select(self.board_dropdown, value))
+            for value, label in [('all', '全部板块'), *((board.id, board.name) for board in self.boards)]
+        ] + [ft.PopupMenuItem()] + [
+            ft.PopupMenuItem(content=f'标签：{label}', checked=self.tag_dropdown.value == value,
+                             on_click=select(self.tag_dropdown, value))
+            for value, label in [('all', '全部标签'), *((tag, f'#{tag}') for tag in sorted(self.tags))]
+        ]
+        active = self.board_dropdown.value != 'all' or self.tag_dropdown.value != 'all'
+        self.filter_menu.icon_color = ft.Colors.BLUE_600 if active else None
+
     def set_context(self, context: str):
         self._context = context
-        self.filters.visible = context == 'commands'
+        self._set_filter_visibility()
         self.search_input.hint_text = {
             'tasks': '搜索任务标题、描述...',
             'questions': '搜索问题、描述或解答...',
@@ -132,10 +167,12 @@ class SearchBar(IsolatedControl, ft.Container):
             await self._run_search()
 
     async def _on_board_change(self, e):
+        self._build_filter_menu()
         self.cancel_pending_search()
         await self._run_search()
 
     async def _on_tag_change(self, e):
+        self._build_filter_menu()
         self.cancel_pending_search()
         await self._run_search()
 
@@ -176,6 +213,9 @@ class SearchBar(IsolatedControl, ft.Container):
         if cleared:
             self.board_dropdown.value = 'all'
         self.board_dropdown.update()
+        self._build_filter_menu()
+        if self.filter_menu.visible:
+            self.filter_menu.update()
         return cleared
 
     def update_tags(self, tags: List[str]):
@@ -190,6 +230,9 @@ class SearchBar(IsolatedControl, ft.Container):
         if cleared:
             self.tag_dropdown.value = 'all'
         self.tag_dropdown.update()
+        self._build_filter_menu()
+        if self.filter_menu.visible:
+            self.filter_menu.update()
         return cleared
 
     def reset_filters(self, board_id=None):
@@ -197,6 +240,7 @@ class SearchBar(IsolatedControl, ft.Container):
         self.search_input.value = ''
         self.board_dropdown.value = board_id or 'all'
         self.tag_dropdown.value = 'all'
+        self._build_filter_menu()
         self.update()
 
     async def _on_clear_click(self, e):

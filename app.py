@@ -1,5 +1,5 @@
 # app.py
-__version__ = "1.5.0"
+__version__ = "1.5.1"
 
 import os
 import sys
@@ -350,28 +350,26 @@ class CmdBoxApp:
             on_click=self._on_pull_data
         )
         self.header = ft.Container(
-            content=ft.Column([
-                ft.Row([
-                    self.logo,
-                    ft.Row([
-                        ft.IconButton(
-                            icon=ft.Icons.DOWNLOAD,
-                            icon_size=20,
-                            tooltip="导出指令",
-                            on_click=self._on_export_click
-                        ),
-                        self.upload_btn,
-                        self.pull_btn,
-                        ft.IconButton(
-                            icon=ft.Icons.SETTINGS_OUTLINED,
-                            icon_size=20,
-                            tooltip="设置",
-                            on_click=self._on_settings
-                        )
-                    ], spacing=0)
-                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+            content=ft.Row([
+                self.logo,
                 self.search_bar,
-            ], spacing=4, tight=True),
+                ft.Row([
+                    ft.IconButton(
+                        icon=ft.Icons.DOWNLOAD,
+                        icon_size=20,
+                        tooltip="导出指令",
+                        on_click=self._on_export_click
+                    ),
+                    self.upload_btn,
+                    self.pull_btn,
+                    ft.IconButton(
+                        icon=ft.Icons.SETTINGS_OUTLINED,
+                        icon_size=20,
+                        tooltip="设置",
+                        on_click=self._on_settings
+                    )
+                ], spacing=0, tight=True),
+            ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
             padding=ft.padding.symmetric(horizontal=12, vertical=8),
             bgcolor=ft.Colors.WHITE,
             border=ft.border.only(bottom=ft.border.BorderSide(1, ft.Colors.GREY_200))
