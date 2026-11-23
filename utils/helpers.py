@@ -6,6 +6,8 @@ from functools import lru_cache
 
 import flet as ft
 
+from utils.web_fonts import WEB_EMOJI_FONT
+
 
 def format_datetime(iso_str: str) -> str:
     """格式化 ISO 时间为可读格式"""
@@ -67,7 +69,7 @@ def create_icon_widget(icon_value: str, size: int = 16):
             fit=ft.BoxFit.CONTAIN,
         )
     else:
-        inner = ft.Text(icon_value, size=size)
+        inner = ft.Text(icon_value, size=size, font_family_fallback=[WEB_EMOJI_FONT])
     return ft.Container(
         content=inner,
         width=size + 4,

@@ -1,4 +1,6 @@
 flet==0.82.2
+flet-web==0.82.2
+fastapi<0.145  # Flet 0.82.2 still passes openapi_prefix to FastAPI
 gitpython>=3.1.40
 pyperclip>=1.8.2
 requests>=2.28.0

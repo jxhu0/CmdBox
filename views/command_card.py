@@ -5,6 +5,7 @@ from typing import Callable
 from models.command import Command
 from models.board import Board
 from utils.helpers import truncate_text
+from utils.web_fonts import WEB_EMOJI_FONT, WEB_TEXT_FONT
 
 
 # 标签颜色配置
@@ -144,6 +145,7 @@ class CommandCard(IsolatedControl, ft.Container):
             size=13,
             color=ft.Colors.GREY_600,
             font_family="monospace",
+            font_family_fallback=[WEB_TEXT_FONT, WEB_EMOJI_FONT],
             selectable=True
         )
 

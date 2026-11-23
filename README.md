@@ -72,6 +72,27 @@ Linux 桌面环境的原生文件选择器还需要安装 `zenity`。
 python3 main.py
 ```
 
+### 网页版（在不同设备上使用）
+
+网页版运行在一台持续开机的电脑或服务器上。所有浏览器访问同一个服务器数据目录；桌面版的 `~/.cmdbox` 配置不会被修改。
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+mkdir -p "$HOME/cmdbox-data"
+export CMDBOX_WEB_DATA_DIR="$HOME/cmdbox-data"
+export CMDBOX_WEB_PASSWORD='换成自己的长密码'
+.venv/bin/python run_web.py
+```
+
+逐行执行命令，每行末尾直接回车。启动后保持终端运行，再在启动服务的电脑上打开 [本机网页版](http://127.0.0.1:8765/)。
+
+如果已经有数据，可将 `CMDBOX_WEB_DATA_DIR` 设为现有 Git 数据仓库的**绝对路径**（其中应有 `data.json`），这样网页版直接使用现有板块、指令、任务和问题。默认地址为 `http://127.0.0.1:8765`，仅本机可访问。
+
+其他机器访问时，在服务器上设置 `CMDBOX_WEB_HOST=0.0.0.0` 后启动，再通过局域网地址或私有网络地址访问 `http://服务器地址:8765`。跨公网使用时，请在前面配置 HTTPS 反向代理，不要直接公开 HTTP 端口。网页版要求访问密码；建议使用长且独立的密码。
+
+网页端的复制操作写入当前浏览器的剪贴板，导出文件下载到当前设备。服务器统一保存数据；如另一台设备修改了数据，请刷新当前页面再继续编辑。多台设备同时编辑同一份数据时，现有的外部变更保护可能阻止较旧页面保存，以防覆盖新数据。Git 上传/拉取仍使用服务器上的 Git 仓库和凭据。
+
 ### 打包
 
 使用 PyInstaller 打包：

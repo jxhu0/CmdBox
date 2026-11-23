@@ -34,8 +34,9 @@ from views.update_dialog import UpdateDialog
 class CmdBoxApp:
     """CmdBox 主应用"""
 
-    def __init__(self, page: ft.Page):
+    def __init__(self, page: ft.Page, *, web_data_dir: Optional[str] = None):
         self.page = page
+        self.web_data_dir = web_data_dir
         self._closing = False
         self._recurring_check_task = None
         self._last_recurring_check_date = None
@@ -65,10 +66,15 @@ class CmdBoxApp:
         self._is_moving: bool = False
 
         # 检查是否已初始化
-        config_path = Path.home() / ".cmdbox"
+        config_path = (Path(web_data_dir) / ".web-config") if web_data_dir else (Path.home() / ".cmdbox")
         self.config_service = ConfigService(str(config_path))
 
-        if self.config_service.load() and self.config_service.is_initialized():
+        if web_data_dir:
+            self.config_service.load()
+            if self.config_service.get("repo_path") != web_data_dir:
+                self.config_service.init(web_data_dir)
+            self._init_app()
+        elif self.config_service.load() and self.config_service.is_initialized():
             self._init_app()
         else:
             self._show_setup_wizard()
@@ -76,12 +82,15 @@ class CmdBoxApp:
     def _setup_page(self):
         """设置页面属性"""
         self.page.title = "CmdBox"
+        self.page.theme_mode = ft.ThemeMode.LIGHT
+        self.page.on_resize = self._on_page_resize
+
+        if self.web_data_dir:
+            return
         self.page.window.width = 900
         self.page.window.height = 600
-        self.page.theme_mode = ft.ThemeMode.LIGHT
         self.page.window.prevent_close = True
         self.page.window.on_event = self._on_window_event
-        self.page.on_resize = self._on_page_resize
 
         # 根据操作系统设置字体
         import platform
@@ -184,7 +193,8 @@ class CmdBoxApp:
                 ft.Text(str(error), selectable=True),
                 ft.Text(f'数据目录：{repo_path}', selectable=True),
                 ft.TextButton('重试', on_click=lambda e: self._init_app()),
-                ft.TextButton('选择其他数据目录', on_click=lambda e: self._show_setup_wizard()),
+                ft.TextButton('选择其他数据目录', on_click=lambda e: self._show_setup_wizard(),
+                              visible=not bool(self.web_data_dir)),
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, tight=True),
                 alignment=ft.Alignment(0, 0), expand=True))
             return
@@ -779,6 +789,9 @@ class CmdBoxApp:
 
     def _on_copy_command(self, command: Command):
         """复制指令"""
+        if getattr(self, 'web_data_dir', None):
+            self.page.run_task(self._copy_to_browser, command.content)
+            return
         success = self.clipboard_service.copy(command.content)
 
         # 创建悬浮提示
@@ -813,6 +826,13 @@ class CmdBoxApp:
                 self.page.update()
 
         self.page.run_task(remove_toast)
+
+    async def _copy_to_browser(self, content: str):
+        try:
+            await ft.Clipboard().set(content)
+            self._show_snack_bar('已复制到剪贴板')
+        except Exception as error:
+            self._show_snack_bar(f'复制失败：{error}。可选中文本手动复制', 8000)
 
     def _on_edit_command(self, command: Command):
         """编辑指令"""
@@ -1174,12 +1194,19 @@ class CmdBoxApp:
             ext = f'.{fmt}'
             if not filename.lower().endswith(ext):
                 filename += ext
-            path = await choose_export_path(self.page, filename, fmt)
-            if not path:
-                return
-            data = await asyncio.to_thread(
-                self.data_service.export_commands_list, commands, fmt, board_names)
-            await asyncio.to_thread(Path(path).write_text, data, encoding='utf-8')
+            if getattr(self, 'web_data_dir', None):
+                data = await asyncio.to_thread(
+                    self.data_service.export_commands_list, commands, fmt, board_names)
+                await ft.FilePicker().save_file(
+                    file_name=filename, file_type=ft.FilePickerFileType.CUSTOM,
+                    allowed_extensions=[fmt], src_bytes=data.encode('utf-8'))
+            else:
+                path = await choose_export_path(self.page, filename, fmt)
+                if not path:
+                    return
+                data = await asyncio.to_thread(
+                    self.data_service.export_commands_list, commands, fmt, board_names)
+                await asyncio.to_thread(Path(path).write_text, data, encoding='utf-8')
             self._show_snack_bar(f'导出成功，共 {len(commands)} 条指令')
         except Exception as error:
             self._show_snack_bar(f'导出失败：{error}', 8000)
@@ -1243,6 +1270,8 @@ class CmdBoxApp:
 
         def on_path_save(new_path: str):
             """保存新的数据存储路径"""
+            if getattr(self, 'web_data_dir', None):
+                return False
             old_path = self.config_service.get("repo_path")
             if new_path != old_path:
                 try:
@@ -1267,6 +1296,10 @@ class CmdBoxApp:
             on_path_save=self._guard_data_edit(on_path_save),
             latest_version=latest_version
         )
+        if getattr(self, 'web_data_dir', None):
+            dialog.path_field.read_only = True
+            dialog.browse_btn.visible = False
+            dialog.tutorial_btn.visible = False
         self.page.show_dialog(dialog)
 
 
