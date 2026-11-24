@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 
 from services.config_service import ConfigService
 from services.data_service import DataService, ExternalDataChangeError
-from services.git_service import GitService
+from services.git_service import GitService, SyncConflict
 from services.clipboard_service import ClipboardService
 from services.update_service import UpdateService
 from services.file_dialog_service import choose_export_path
@@ -1097,6 +1097,38 @@ class CmdBoxApp:
             self.page.update(*controls)
         return controls
 
+    async def _confirm_data_overwrite(self, upload):
+        import asyncio
+        choice = asyncio.get_running_loop().create_future()
+        source, target = ('本地', '远程') if upload else ('远程', '本地')
+        reason = ('远程有尚未拉取的改动，普通上传被拒绝。' if upload
+                  else '本地与远程的数据无法自动合并。')
+
+        async def cancel(e):
+            if not choice.done():
+                choice.set_result(False)
+                self.page.pop_dialog()
+
+        async def confirm(e):
+            if not choice.done():
+                choice.set_result(True)
+                self.page.pop_dialog()
+
+        async def dismiss(e):
+            if not choice.done():
+                choice.set_result(False)
+
+        self.page.show_dialog(ft.AlertDialog(
+            modal=True,
+            title=ft.Text(f'强制覆盖{target}数据？'),
+            content=ft.Text(f'{reason}\n\n继续后将以{source}数据为准。'
+                            f'如{target}已有数据，会先备份，可在设置中恢复。'),
+            actions=[ft.TextButton('取消', on_click=cancel),
+                     ft.TextButton(f'覆盖{target}数据', on_click=confirm)],
+            on_dismiss=dismiss,
+        ))
+        return await choice
+
     async def _run_data_transfer(self, upload: bool):
         """上传与拉取独立执行，并共享忙碌状态和错误处理。"""
         import asyncio
@@ -1106,6 +1138,7 @@ class CmdBoxApp:
         self.search_bar.cancel_pending_search()
         self._set_edit_controls_disabled(True)
         syncing_snack = None
+        overwrite = False
         action = "上传" if upload else "拉取"
         try:
             # 检查是否有远程仓库
@@ -1131,6 +1164,17 @@ class CmdBoxApp:
                     self._refresh_tasks()
             operation = self.git_service.upload_data if upload else self.git_service.pull_data
             success, msg = await asyncio.to_thread(operation, self.data_service)
+            if not success and isinstance(msg, SyncConflict):
+                syncing_snack.open = False
+                self.page.update()
+                if not await self._confirm_data_overwrite(upload):
+                    return
+                overwrite = True
+                syncing_snack.content.controls[1].value = '正在备份并覆盖数据…'
+                syncing_snack.open = True
+                self.page.update()
+                success, msg = await asyncio.to_thread(
+                    self.git_service.overwrite_data, self.data_service, msg, upload=upload)
             if not upload and success:
                 self._reset_recurring_tasks()
                 self._refresh_sidebar()
@@ -1140,28 +1184,25 @@ class CmdBoxApp:
                     selected = self.FAVORITES_BOARD_ID
                 self._on_board_select(selected)
 
-            # 关闭同步中提示
-            syncing_snack.open = False
-            if syncing_snack in self.page.overlay:
-                self.page.overlay.remove(syncing_snack)
-            self.page.update()
-
             if success:
                 self.config_service.update_last_sync()
-                self._show_snack_bar(msg)
-            else:
-                self._show_snack_bar(msg, 8000)
         except Exception as ex:
-            # 确保关闭同步中提示
-            if syncing_snack:
+            success, msg = False, f"{action}失败: {ex}"
+        finally:
+            if syncing_snack is not None:
                 syncing_snack.open = False
                 if syncing_snack in self.page.overlay:
                     self.page.overlay.remove(syncing_snack)
-                self.page.update()
-            self._show_snack_bar(f"{action}失败: {str(ex)}", 8000)
-        finally:
             self._syncing = False
             self._set_edit_controls_disabled(False)
+            self.page.update()
+
+        if overwrite:
+            self._show_snack_bar(msg, 12000)
+        elif success:
+            self._show_snack_bar(msg)
+        else:
+            self._show_snack_bar(msg, 8000)
 
     def _on_export_click(self, e):
         """点击导出按钮"""

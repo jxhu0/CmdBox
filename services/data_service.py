@@ -233,7 +233,7 @@ class DataService:
     def restore_backup(self, backup_path):
         """先完整校验备份，再备份当前数据并原子替换，最后替换内存模型。"""
         self.flush()
-        data = json.loads(Path(backup_path).read_text(encoding='utf-8'))
+        data = json.loads(Path(backup_path).read_bytes())
         records = self.parse_data(data)
         self.backup()
         self._write_snapshot(data)
@@ -288,6 +288,24 @@ class DataService:
 
         return str(backup_file)
 
+    def backup_overwritten_data(self, raw: bytes, source: str) -> Path:
+        """保留被覆盖的原始文件，供用户手动恢复。"""
+        self.backup_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S_%f')
+        backup = self.backup_dir / f'data_overwrite_{source}_{timestamp}_{uuid.uuid4().hex}.json'
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(dir=self.backup_dir, delete=False) as handle:
+                temporary = Path(handle.name)
+                handle.write(raw)
+                handle.flush()
+                os.fsync(handle.fileno())
+            temporary.replace(backup)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+        return backup
+
     def _cleanup_old_backups(self):
         """清理旧备份，只保留最近10个"""
         if not self.backup_dir.exists():
@@ -300,7 +318,7 @@ class DataService:
     def _automatic_backups(self):
         """冲突副本不参与自动清理或静默恢复，避免覆盖用户的恢复选择。"""
         return sorted((path for path in self.backup_dir.glob('data_*.json')
-                       if not path.name.startswith('data_local_')),
+                       if not path.name.startswith(('data_local_', 'data_overwrite_'))),
                       key=lambda path: path.stat().st_mtime, reverse=True)
 
     def get_backups(self) -> List[dict]:
@@ -311,10 +329,12 @@ class DataService:
         backups = []
         for f in sorted(self.backup_dir.glob("data_*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
             stat = f.stat()
+            overwrite_source = f.name.split('_', 3)[2] if f.name.startswith('data_overwrite_') else None
             backups.append({
                 "path": str(f),
                 "name": f.name,
                 "local_draft": f.name.startswith('data_local_'),
+                "overwrite_source": overwrite_source,
                 "size": stat.st_size,
                 "created": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
             })

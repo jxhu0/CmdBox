@@ -616,8 +616,10 @@ class SettingsDialog(ft.AlertDialog):
             )
             return
 
+        labels = {'local': '覆盖前的本地数据', 'remote': '覆盖前的远程数据'}
         for backup in backups:
-            label = '本地未上传副本' if backup.get('local_draft') else '自动备份'
+            label = labels.get(backup.get('overwrite_source'),
+                               '本地未上传副本' if backup.get('local_draft') else '自动备份')
             row = ft.Row([
                 ft.Text(f'{label} · {backup["created"]}', size=11, expand=True,
                         tooltip=backup['name']),

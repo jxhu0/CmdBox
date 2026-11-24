@@ -1,4 +1,5 @@
 import asyncio
+import codecs
 import json
 import os
 import sys
@@ -15,7 +16,7 @@ from app import CmdBoxApp
 from models.command import Command
 from models.task import Task
 from services.data_service import DataService
-from services.git_service import GitService
+from services.git_service import GitService, SyncConflict
 
 
 class SyncTests(unittest.TestCase):
@@ -84,6 +85,7 @@ class SyncTests(unittest.TestCase):
         before = self.data.data_file.read_bytes()
         success, message = self.git.upload_data(self.data)
         self.assertFalse(success)
+        self.assertIsInstance(message, SyncConflict)
         self.assertIn('先点击“拉取数据”', message)
         self.assertEqual(self.data.data_file.read_bytes(), before)
         self.assertEqual([t.id for t in self.data.tasks], [task.id])
@@ -138,12 +140,180 @@ class SyncTests(unittest.TestCase):
         original = self.data.data_file.read_bytes()
         success, message = self.git.pull_data(self.data)
         self.assertFalse(success)
+        self.assertIsInstance(message, SyncConflict)
         self.assertIn('冲突', message)
         self.assertEqual(self.data.data_file.read_bytes(), original)
         self.assertEqual(self.remote.commit('main').hexsha, remote_head)
         self.assertFalse((Path(self.local.git_dir) / 'MERGE_HEAD').exists())
         self.assertEqual(self.data.commands[0].id, command.id)
         self.assertTrue(self.data.get_backups())
+
+    def test_confirmed_upload_backs_up_remote_and_preserves_history(self):
+        (Path(self.other.working_tree_dir) / 'notes.txt').write_text('远程备注', encoding='utf-8')
+        self.other.git.add('notes.txt')
+        self.publish_command()
+        remote_before = self.remote.commit('main')
+        self.data.add_command(Command.create(self.data.boards[0].id, '本地新增', 'echo local'))
+        local_before = self.data.data_file.read_bytes()
+
+        _, conflict = self.git.upload_data(self.data)
+        success, message = self.git.overwrite_data(self.data, conflict, upload=True)
+
+        self.assertTrue(success, message)
+        remote_after = self.remote.commit('main')
+        self.assertEqual(self.local.head.commit, remote_after)
+        self.assertEqual(remote_after.tree['data.json'].data_stream.read(), local_before)
+        self.assertEqual(remote_after.tree['notes.txt'].data_stream.read().decode(), '远程备注')
+        self.assertIn(remote_before, remote_after.parents)
+        self.assertEqual(self.data.data_file.read_bytes(), local_before)
+        backup, = [b for b in self.data.get_backups() if b['overwrite_source'] == 'remote']
+        self.assertEqual(Path(backup['path']).read_bytes(), remote_before.tree['data.json'].data_stream.read())
+        self.assertNotIn(Path(backup['path']).relative_to(self.data.data_path).as_posix(), remote_after.tree)
+        self.assertTrue(self.git.upload_data(self.data)[0])
+
+    def test_confirmed_pull_backs_up_local_and_reloads_remote_without_pushing(self):
+        command = self.publish_command()
+        remote_before = self.remote.commit('main')
+        self.data.add_command(Command.create(self.data.boards[0].id, '本地新增', 'echo local'))
+        local_before = self.data.data_file.read_bytes()
+
+        _, conflict = self.git.pull_data(self.data)
+        success, message = self.git.overwrite_data(self.data, conflict, upload=False)
+
+        self.assertTrue(success, message)
+        self.assertEqual(self.remote.commit('main'), remote_before)
+        self.assertEqual(self.data.data_file.read_bytes(), remote_before.tree['data.json'].data_stream.read())
+        self.assertEqual([item.id for item in self.data.commands], [command.id])
+        backup, = [b for b in self.data.get_backups() if b['overwrite_source'] == 'local']
+        self.assertEqual(Path(backup['path']).read_bytes(), local_before)
+        for _ in range(11):
+            self.data.backup()
+        self.data.restore_backup(backup['path'])
+        self.assertEqual([item.title for item in self.data.commands], ['本地新增'])
+
+    def test_confirmed_upload_when_remote_has_no_data_file(self):
+        self.other.git.rm('data.json')
+        self.other.index.commit('移除远程数据文件')
+        self.other.git.push('origin', 'main')
+        self.data.add_task(Task.create('本地任务'))
+        _, conflict = self.git.upload_data(self.data)
+        success, message = self.git.overwrite_data(self.data, conflict, upload=True)
+
+        self.assertTrue(success, message)
+        self.assertEqual(self.remote.commit('main').tree['data.json'].data_stream.read(),
+                         self.data.data_file.read_bytes())
+        self.assertFalse(any(b['overwrite_source'] for b in self.data.get_backups()))
+
+    def test_overwrite_aborts_if_backup_fails(self):
+        self.publish_command()
+        self.data.add_command(Command.create(self.data.boards[0].id, '本地新增', 'echo local'))
+        local_before = self.data.data_file.read_bytes()
+        remote_before = self.remote.commit('main')
+        for upload in (True, False):
+            with self.subTest(upload=upload):
+                _, conflict = (self.git.upload_data if upload else self.git.pull_data)(self.data)
+                head = self.local.head.commit
+                with patch.object(self.data, 'backup_overwritten_data', side_effect=OSError('磁盘已满')):
+                    success, message = self.git.overwrite_data(self.data, conflict, upload=upload)
+                self.assertFalse(success)
+                self.assertIn('备份失败', message)
+                self.assertEqual(self.local.head.commit, head)
+                self.assertEqual(self.remote.commit('main'), remote_before)
+                self.assertEqual(self.data.data_file.read_bytes(), local_before)
+
+    def test_confirmed_upload_checks_remote_version_at_push(self):
+        self.publish_command()
+        previous = self.remote.commit('main')
+        self.publish_command()
+        self.data.add_command(Command.create(self.data.boards[0].id, '本地新增', 'echo local'))
+        _, conflict = self.git.upload_data(self.data)
+        local_before = self.local.head.commit
+        data_before = self.data.data_file.read_bytes()
+        run = self.git._run_network_command
+
+        def move_remote_before_push(repo, command, *args):
+            if command == 'push':
+                self.remote.git.update_ref('refs/heads/main', previous.hexsha)
+            return run(repo, command, *args)
+
+        with patch.object(self.git, '_run_network_command', side_effect=move_remote_before_push):
+            success, message = self.git.overwrite_data(self.data, conflict, upload=True)
+        self.assertFalse(success)
+        self.assertIn('远程版本在上传前已变化', message)
+        self.assertIn('备份', message)
+        self.assertEqual(self.remote.commit('main'), previous)
+        self.assertEqual(self.local.head.commit, local_before)
+        self.assertEqual(self.data.data_file.read_bytes(), data_before)
+
+        success, retry = self.git.upload_data(self.data)
+        self.assertFalse(success)
+        self.assertIsInstance(retry, SyncConflict)
+        self.assertEqual(retry.remote_commit, previous.hexsha)
+        self.assertEqual(self.remote.commit('main'), previous)
+
+    def test_confirmed_upload_rejects_other_files_in_outgoing_history(self):
+        notes = Path(self.local.working_tree_dir) / 'local-notes.txt'
+        notes.write_text('仅用于本地的笔记', encoding='utf-8')
+        self.local.git.add('local-notes.txt')
+        self.local.index.commit('添加本地笔记')
+        self.local.git.rm('local-notes.txt')
+        self.local.git.commit('-m', '删除本地笔记')
+        self.publish_command()
+        remote_before = self.remote.commit('main')
+        self.data.add_task(Task.create('本地任务'))
+        _, conflict = self.git.upload_data(self.data)
+        local_before = self.local.head.commit
+
+        success, message = self.git.overwrite_data(self.data, conflict, upload=True)
+
+        self.assertFalse(success)
+        self.assertIn('data.json 以外的文件', message)
+        self.assertEqual(self.remote.commit('main'), remote_before)
+        self.assertEqual(self.local.head.commit, local_before)
+
+    def test_successful_overwrite_preserves_local_edits_made_during_push(self):
+        self.publish_command()
+        self.data.add_task(Task.create('准备上传的任务'))
+        _, conflict = self.git.upload_data(self.data)
+        local_before = self.local.head.commit
+        confirmed = self.data.data_file.read_bytes()
+        run = self.git._run_network_command
+
+        def edit_during_push(repo, command, *args):
+            if command == 'push':
+                second_window = DataService(str(self.data.data_path))
+                second_window.load()
+                second_window.add_task(Task.create('推送期间新增的任务'))
+            return run(repo, command, *args)
+
+        with patch.object(self.git, '_run_network_command', side_effect=edit_during_push):
+            success, message = self.git.overwrite_data(self.data, conflict, upload=True)
+
+        self.assertTrue(success, message)
+        self.assertIn('本地分支未更新', message)
+        self.assertEqual(self.remote.commit('main').tree['data.json'].data_stream.read(), confirmed)
+        self.assertEqual(self.local.head.commit, local_before)
+        tasks = json.loads(self.data.data_file.read_bytes())['tasks']
+        self.assertIn('推送期间新增的任务', [task['title'] for task in tasks])
+
+    def test_overwritten_remote_backup_with_utf8_bom_can_be_restored(self):
+        command = self.publish_command()
+        remote_file = Path(self.other.working_tree_dir) / 'data.json'
+        remote_raw = codecs.BOM_UTF8 + remote_file.read_bytes()
+        remote_file.write_bytes(remote_raw)
+        self.other.git.add('data.json')
+        self.other.index.commit('保留远程数据的 UTF-8 标记')
+        self.other.git.push('origin', 'main')
+        self.data.add_task(Task.create('本地任务'))
+        _, conflict = self.git.upload_data(self.data)
+
+        success, message = self.git.overwrite_data(self.data, conflict, upload=True)
+
+        self.assertTrue(success, message)
+        backup, = [item for item in self.data.get_backups() if item['overwrite_source'] == 'remote']
+        self.assertEqual(Path(backup['path']).read_bytes(), remote_raw)
+        self.data.restore_backup(backup['path'])
+        self.assertEqual([item.id for item in self.data.commands], [command.id])
 
     def test_invalid_remote_data_is_rejected_before_merge_commit(self):
         original = self.data.data_file.read_bytes()
@@ -157,6 +327,7 @@ class SyncTests(unittest.TestCase):
                 success, message = self.git.pull_data(self.data)
                 self.assertFalse(success)
                 self.assertIn('校验', message)
+                self.assertNotIsInstance(message, SyncConflict)
                 self.assertEqual(self.data.data_file.read_bytes(), original)
                 self.assertFalse((Path(self.local.git_dir) / 'MERGE_HEAD').exists())
 
@@ -371,10 +542,41 @@ class SyncUiTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(app.page.overlay, [])
                     app.config_service.update_last_sync.assert_not_called()
                     app._on_board_select.assert_not_called()
+                    app.page.show_dialog.assert_not_called()
                     if failure == 'no-remote':
                         operation.assert_not_called()
                     else:
                         operation.assert_called_once_with(app.data_service)
+
+    async def test_conflict_dialog_only_overwrites_after_confirmation(self):
+        for upload in (True, False):
+            for confirm in (True, False):
+                with self.subTest(upload=upload, confirm=confirm):
+                    app = self.make_app()
+                    conflict = SyncConflict('冲突', 'main', 'local', 'remote', 'origin')
+                    operation = app.git_service.upload_data if upload else app.git_service.pull_data
+                    operation.return_value = False, conflict
+                    app.git_service.overwrite_data.return_value = True, '已覆盖数据'
+                    shown = asyncio.Event()
+                    app.page.show_dialog.side_effect = lambda _: shown.set()
+
+                    pending = asyncio.create_task(app._run_data_transfer(upload))
+                    await asyncio.wait_for(shown.wait(), timeout=5)
+                    self.assertTrue(app._syncing)
+                    app.git_service.overwrite_data.assert_not_called()
+                    dialog = app.page.show_dialog.call_args.args[0]
+                    self.assertIn('远程' if upload else '本地', dialog.title.value)
+                    await dialog.actions[int(confirm)].on_click(None)
+                    await asyncio.wait_for(pending, timeout=5)
+
+                    self.assertFalse(app._syncing)
+                    self.assertEqual(app.page.overlay, [])
+                    if confirm:
+                        app.git_service.overwrite_data.assert_called_once_with(app.data_service, conflict, upload=upload)
+                        app.config_service.update_last_sync.assert_called_once()
+                    else:
+                        app.git_service.overwrite_data.assert_not_called()
+                        app.config_service.update_last_sync.assert_not_called()
 
     async def test_upload_resets_expired_recurring_tasks_before_transfer(self):
         app = self.make_app()

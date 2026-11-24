@@ -4,9 +4,25 @@ import json
 import os
 import sys
 import subprocess
+import tempfile
 from typing import Optional, Tuple
 from pathlib import Path
 from datetime import datetime
+
+from services.data_schema import parse_data
+from services.file_lock import data_file_lock
+
+
+class SyncConflict(str):
+    """失败提示及用户可以确认覆盖的两个提交。"""
+
+    def __new__(cls, message, branch, local_commit, remote_commit, remote_url):
+        conflict = super().__new__(cls, message)
+        conflict.branch = branch
+        conflict.local_commit = local_commit
+        conflict.remote_commit = remote_commit
+        conflict.remote_url = remote_url
+        return conflict
 
 
 class GitService:
@@ -92,7 +108,7 @@ class GitService:
 
     def _network_environment(self):
         environment = {
-            'GIT_TERMINAL_PROMPT': '0', 'GCM_INTERACTIVE': 'Never',
+            'GIT_TERMINAL_PROMPT': '0', 'GCM_INTERACTIVE': 'Never', 'LC_ALL': 'C',
         }
         # 保留用户选择的 SSH 客户端、密钥及 core.sshCommand。
         if not os.environ.get('GIT_SSH_COMMAND') and not os.environ.get('GIT_SSH'):
@@ -178,53 +194,81 @@ class GitService:
                     return True, "远程仓库为空，无可拉取的数据"
                 return False, f'远程分支 {target_branch} 不存在，请检查分支配置'
 
-            # 不自动提交用户尚未处理的合并。
-            merge_head_path = Path(repo.git_dir) / "MERGE_HEAD"
-            if merge_head_path.exists():
-                return False, "存在未完成的合并，请先处理后再拉取"
-
-            # fetch 已获取远程数据，直接合并，避免重复网络请求。
-            data_file = self.repo_path / 'data.json'
-            had_data_file = data_file.exists()
-            try:
-                repo.git.merge(remote_branch, "--allow-unrelated-histories", "--no-edit",
-                               "--no-commit", "--no-ff")
-            except Exception as e:
-                if merge_head_path.exists():
-                    if not self._merge_initial_data(repo, remote_branch):
-                        repo.git.merge("--abort")
-                        return False, "拉取存在合并冲突，已中止合并并保留本地和远程数据，请处理冲突后重试"
-                else:
-                    raise e
-
-            if merge_head_path.exists():
-                # 文本合并成功也可能产生无效 JSON 或重复记录；提交前校验。
-                try:
-                    if had_data_file or data_file.exists():
-                        from services.data_service import DataService
-                        DataService.parse_data(json.loads(data_file.read_text(encoding='utf-8')))
-                    repo.git.commit('-m', '合并远程数据')
-                except Exception as error:
-                    repo.git.merge('--abort')
-                    return False, f'合并数据校验或提交失败，已恢复本地数据: {error}'
-
-            return True, "拉取成功"
+            with data_file_lock(self.repo_path):
+                remote_commit = repo.commit(remote_branch).hexsha
+                return self._merge_pull(repo, target_branch, remote_commit)
         except Exception as e:
             error_msg = str(e)
             if "no reference" in error_msg.lower() or "couldn't find remote ref" in error_msg.lower():
                 return True, "远程仓库为空，无可拉取的数据"
             return False, f"拉取失败: {error_msg}"
 
+    def _merge_pull(self, repo, branch, remote_commit):
+        merge_head = Path(repo.git_dir) / 'MERGE_HEAD'
+        if merge_head.exists():
+            return False, '存在未完成的合并，请先处理后再拉取'
+
+        data_file = self.repo_path / 'data.json'
+        had_data_file = data_file.exists()
+        try:
+            self._start_merge(repo, remote_commit)
+        except self.git.GitCommandError:
+            if not merge_head.exists():
+                raise
+            conflicts = set(repo.index.unmerged_blobs())
+            if not self._merge_initial_data(repo, remote_commit):
+                repo.git.merge('--abort')
+                message = '拉取存在合并冲突，已中止合并并保留两端数据'
+                if conflicts == {'data.json'}:
+                    message = self._pull_conflict(repo, message, branch, remote_commit)
+                return False, message
+
+        if merge_head.exists():
+            # 文本合并成功也可能产生无效 JSON 或重复记录。
+            try:
+                if had_data_file or data_file.exists():
+                    parse_data(json.loads(data_file.read_bytes()))
+            except (ValueError, TypeError, KeyError) as error:
+                repo.git.merge('--abort')
+                message = f'合并数据校验失败，已恢复本地数据：{error}'
+                return False, self._pull_conflict(repo, message, branch, remote_commit)
+            except OSError:
+                repo.git.merge('--abort')
+                raise
+            try:
+                repo.git.commit('-m', '合并远程数据')
+            except Exception as error:
+                repo.git.merge('--abort')
+                return False, f'合并数据提交失败，已恢复本地数据：{error}'
+
+        return True, '拉取成功'
+
+    def _start_merge(self, repo, remote_commit):
+        repo.git.merge('--allow-unrelated-histories', '--no-edit', '--no-commit', '--no-ff', remote_commit)
+
+    @staticmethod
+    def _read_committed_data(repo, commit):
+        blob = repo.commit(commit).tree['data.json']
+        if blob.mode not in (0o100644, 0o100755):
+            raise ValueError('data.json 必须是普通文件')
+        return blob.data_stream.read()
+
+    def _pull_conflict(self, repo, message, branch, remote_commit):
+        try:
+            parse_data(json.loads(self._read_committed_data(repo, remote_commit)))
+        except (ValueError, TypeError, KeyError, OSError):
+            return message
+        return SyncConflict(message, branch, repo.head.commit.hexsha, remote_commit, self.get_remote_url())
+
     def _merge_initial_data(self, repo, remote_branch) -> bool:
         """独立初始化的仓库首次同步时，按 ID 合并互不冲突的记录。"""
         if repo.merge_base('HEAD', remote_branch) or set(repo.index.unmerged_blobs()) != {'data.json'}:
             return False
         try:
-            from services.data_service import DataService
             local = json.loads(repo.git.show(':2:data.json'))
             remote = json.loads(repo.git.show(':3:data.json'))
-            DataService.parse_data(local)
-            DataService.parse_data(remote)
+            parse_data(local)
+            parse_data(remote)
             # 全新安装生成的空默认板块不需要带入已有的远程数据。
             default_boards = [('Commands', '💻'), ('Prompts', '🤖')]
             if (all(not local.get(name) for name in ('commands', 'tasks', 'questions'))
@@ -255,6 +299,7 @@ class GitService:
                 return False, "未配置远程仓库"
 
             target_branch = self._target_branch(repo)
+            local_commit = repo.head.commit.hexsha
 
             # 普通推送会拒绝覆盖远程的新提交；上传不隐式拉取或强制覆盖。
             with repo.git.custom_environment(**self._network_environment()):
@@ -265,9 +310,163 @@ class GitService:
             error_msg = str(e)
             if any(word in error_msg.lower() for word in ('timed out', 'timeout')):
                 return False, '上传连接超时，本地数据已保留；请检查网络后重试'
-            if any(reason in error_msg.lower() for reason in ("non-fast-forward", "fetch first", "[rejected]")):
-                return False, "远程有尚未拉取的改动，请先点击“拉取数据”，成功后再上传"
+            if any(reason in error_msg.lower() for reason in ('non-fast-forward', 'fetch first')):
+                message = '远程有尚未拉取的改动，请先点击“拉取数据”，成功后再上传'
+                try:
+                    remote_commit = self._remote_tip(repo, target_branch)
+                except Exception as error:
+                    return False, f'远程有尚未拉取的改动，但无法确认远程版本：{error}'
+                if remote_commit:
+                    message = SyncConflict(message, target_branch, local_commit, remote_commit, self.get_remote_url())
+                return False, message
             return False, f"推送失败: {error_msg}"
+
+    def _remote_tip(self, repo, branch):
+        with repo.git.custom_environment(**self._network_environment()):
+            info = self._run_network_command(repo, 'ls_remote', 'origin', f'refs/heads/{branch}')
+        return info.split('\t', 1)[0] if info else None
+
+    def overwrite_data(self, data_service, conflict: SyncConflict, *, upload: bool) -> Tuple[bool, str]:
+        """备份被替换的一方，用选定的 data.json 完成合并。"""
+        backup = None
+        try:
+            repo = self._get_repo()
+            branch = conflict.branch
+            ref = f'refs/heads/{branch}'
+            if (self.get_remote_url() != conflict.remote_url or self._target_branch(repo) != branch
+                    or self._remote_tip(repo, branch) != conflict.remote_commit):
+                return False, '远程版本或配置已变化，请重新发起同步'
+
+            if upload:
+                # 备份和上传必须针对同一个远程仓库。
+                if repo.git.remote('get-url', '--push', '--all', 'origin') != repo.git.remote('get-url', 'origin'):
+                    return False, '远程读取与推送地址不同，无法确认覆盖备份，请检查 Git 配置'
+                with repo.git.custom_environment(**self._network_environment()):
+                    self._run_network_command(repo, 'fetch', '--no-tags', 'origin', ref)
+                if repo.commit('FETCH_HEAD').hexsha != conflict.remote_commit:
+                    return False, '远程版本已变化，请重新发起同步'
+
+            data_service.flush()
+            with data_file_lock(self.repo_path):
+                data_service.assert_current()
+                if not self._matches_local_data(repo, conflict.local_commit):
+                    return False, '本地数据版本已变化，请重新发起同步'
+                if self._has_pending_git_changes(repo):
+                    return False, '存在已暂存的文件或未完成的 Git 操作，请先处理后再覆盖'
+
+                if upload:
+                    local_ref = repo.git.rev_parse('--symbolic-full-name', 'HEAD')
+                    if self._has_other_outgoing_files(repo, conflict):
+                        return False, '本地待推送的提交涉及 data.json 以外的文件，请先处理这些提交再上传'
+                    try:
+                        raw = self._read_committed_data(repo, conflict.remote_commit)
+                    except KeyError:
+                        raw = None  # 远程可能只有初始化提交，还没有应用数据。
+                    source = 'remote'
+                else:
+                    parse_data(json.loads(self._read_committed_data(repo, conflict.remote_commit)))
+                    raw = (self.repo_path / 'data.json').read_bytes()
+                    source = 'local'
+                if raw is not None:
+                    try:
+                        backup = data_service.backup_overwritten_data(raw, source)
+                    except OSError as error:
+                        return False, f'覆盖前备份失败：{error}'
+
+                if upload:
+                    resolved_commit = self._build_overwrite_commit(repo, conflict)
+                else:
+                    self._merge_remote_overwrite(repo, conflict.remote_commit)
+
+            local_update = ''
+            if upload:
+                # 新提交以远程为父提交，预期值同时防止远程在备份后前进或回退。
+                try:
+                    with repo.git.custom_environment(**self._network_environment()):
+                        self._run_network_command(repo, 'push', f'--force-with-lease={ref}:{conflict.remote_commit}',
+                                                  '--no-follow-tags', 'origin', f'{resolved_commit}:{ref}')
+                except self.git.GitCommandError as error:
+                    if 'stale info' in str(error).lower():
+                        saved = f'。备份：{backup.name}' if backup else ''
+                        return False, f'远程版本在上传前已变化，请重新发起同步{saved}'
+                    raise
+                local_update = self._advance_after_overwrite(repo, local_ref, conflict.local_commit, resolved_commit)
+            else:
+                data_service.load()
+            if backup is None:
+                return True, f'已上传本地数据。此前远程尚无 data.json{local_update}'
+            side = '远程' if upload else '本地'
+            return True, f'已覆盖{side}数据。备份可在设置中恢复：{backup.name}{local_update}'
+        except Exception as error:
+            saved = f'。备份：{backup.name}' if backup else ''
+            return False, f'覆盖失败：{error}{saved}'
+
+    @staticmethod
+    def _matches_local_data(repo, local_commit):
+        return (repo.head.commit.hexsha == local_commit
+                and not repo.git.diff('--name-only', 'HEAD', '--', 'data.json'))
+
+    @staticmethod
+    def _has_pending_git_changes(repo):
+        return bool(repo.git.diff('--cached', '--name-only')) or any(
+            (Path(repo.git_dir) / name).exists() for name in (
+                'MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-merge', 'rebase-apply'
+            )
+        )
+
+    @staticmethod
+    def _has_other_outgoing_files(repo, conflict):
+        # 检查所有远程未包含的提交，也拦截曾经加入、后来删除的文件。
+        return bool(repo.git.log('--format=', '--name-only', '-z', '--full-history', '-m',
+                                 f'{conflict.remote_commit}..{conflict.local_commit}',
+                                 '--', '.', ':(top,exclude,literal)data.json'))
+
+    @staticmethod
+    def _build_overwrite_commit(repo, conflict):
+        """在临时索引里只替换远程树中的 data.json。"""
+        blob = repo.commit(conflict.local_commit).tree['data.json']
+        if blob.mode not in (0o100644, 0o100755):
+            raise ValueError('data.json 必须是普通文件')
+        parse_data(json.loads(blob.data_stream.read()))
+        with tempfile.TemporaryDirectory(prefix='cmdbox-overwrite-') as directory:
+            with repo.git.custom_environment(GIT_INDEX_FILE=str(Path(directory) / 'index')):
+                repo.git.read_tree(conflict.remote_commit)
+                repo.git.update_index('--add', '--cacheinfo', f'{blob.mode:o},{blob.hexsha},data.json')
+                tree = repo.git.write_tree()
+        return repo.git.commit_tree(tree, '-p', conflict.remote_commit, '-p', conflict.local_commit,
+                                    '-m', '以本地数据覆盖远程数据')
+
+    def _advance_after_overwrite(self, repo, local_ref, local_commit, resolved_commit):
+        """远程已接收提交，只有本地仍适合快进时才更新本地分支。"""
+        hint = '。本地分支未更新，可在处理本地改动后重新拉取'
+        try:
+            with data_file_lock(self.repo_path):
+                if (repo.git.rev_parse('--symbolic-full-name', 'HEAD') != local_ref
+                        or not self._matches_local_data(repo, local_commit)
+                        or self._has_pending_git_changes(repo)):
+                    return hint
+                repo.git.merge('--ff-only', '--no-edit', resolved_commit)
+        except (self.git.GitCommandError, OSError, ValueError):
+            return hint
+        return ''
+
+    def _merge_remote_overwrite(self, repo, remote_commit):
+        merge_head = Path(repo.git_dir) / 'MERGE_HEAD'
+        try:
+            try:
+                self._start_merge(repo, remote_commit)
+            except self.git.GitCommandError:
+                if not merge_head.exists() or set(repo.index.unmerged_blobs()) != {'data.json'}:
+                    raise
+            if not merge_head.exists():
+                raise ValueError('分支已同步，请重新发起同步')
+            repo.git.restore(f'--source={remote_commit}', '--staged', '--worktree', '--', 'data.json')
+            parse_data(json.loads((self.repo_path / 'data.json').read_bytes()))
+            repo.git.commit('-m', '以远程数据覆盖本地数据')
+        except Exception:
+            if merge_head.exists():
+                repo.git.merge('--abort')
+            raise
 
     def get_remote_url(self) -> Optional[str]:
         """获取远程仓库地址"""
@@ -304,18 +503,19 @@ class GitService:
         if not self.has_remote():
             return False, "未配置远程仓库"
         repo = self._get_repo()
-        if (Path(repo.git_dir) / "MERGE_HEAD").exists():
-            return False, "存在未完成的合并，请先处理后再上传或拉取"
-        if data_service:
-            try:
-                # 编辑操作已排队保存；不要用可能过期的内存再次覆盖磁盘。
+        try:
+            if data_service:
+                # 先等待后台保存，避免持锁等待另一个需要写锁的线程。
                 data_service.flush()
-                data_service.assert_current()
-                data_service.backup()
-            except Exception as e:
-                return False, f"操作前保存或备份失败: {e}"
-
-        return self.commit(f"保存本地数据 {datetime.now().isoformat()}")
+            with data_file_lock(self.repo_path):
+                if (Path(repo.git_dir) / 'MERGE_HEAD').exists():
+                    return False, '存在未完成的合并，请先处理后再上传或拉取'
+                if data_service:
+                    data_service.assert_current()
+                    data_service.backup()
+                return self.commit(f'保存本地数据 {datetime.now().isoformat()}')
+        except Exception as error:
+            return False, f'操作前保存或备份失败：{error}'
 
     def upload_data(self, data_service=None) -> Tuple[bool, str]:
         """提交并上传本地数据，不拉取远程改动。"""
