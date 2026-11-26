@@ -10,9 +10,17 @@ from run_web import create_main, web_settings
 class WebTests(unittest.IsolatedAsyncioTestCase):
     def test_web_requires_password_and_existing_data_directory(self):
         with tempfile.TemporaryDirectory() as directory:
+            # 本机监听（默认 127.0.0.1）允许免密，返回空密码
             with patch.dict('os.environ', {'CMDBOX_WEB_DATA_DIR': directory}, clear=True):
+                self.assertEqual(web_settings(), ('', str(Path(directory).resolve())))
+            # 对外监听必须设置密码
+            with patch.dict('os.environ', {
+                'CMDBOX_WEB_DATA_DIR': directory,
+                'CMDBOX_WEB_HOST': '0.0.0.0',
+            }, clear=True):
                 with self.assertRaises(SystemExit):
                     web_settings()
+            # 有密码时正常返回
             with patch.dict('os.environ', {
                 'CMDBOX_WEB_DATA_DIR': directory,
                 'CMDBOX_WEB_PASSWORD': 'secret',
@@ -38,3 +46,11 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
             await password_field.on_submit(None)
             app_class.assert_called_once_with(page, web_data_dir='/tmp/data')
             page.clean.assert_called_once()
+
+    async def test_empty_password_skips_login(self):
+        page = Mock()
+        with patch('run_web.CmdBoxApp') as app_class:
+            create_main('', '/tmp/data')(page)
+            app_class.assert_called_once_with(page, web_data_dir='/tmp/data')
+            page.add.assert_not_called()  # 不渲染登录界面
+            self.assertIsNotNone(page.on_disconnect)

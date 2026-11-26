@@ -15,20 +15,40 @@ from utils.web_fonts import configure_web_fonts
 def web_settings():
     password = os.environ.get("CMDBOX_WEB_PASSWORD", "")
     data_dir = os.environ.get("CMDBOX_WEB_DATA_DIR", "")
-    if not password:
-        raise SystemExit("请设置 CMDBOX_WEB_PASSWORD 后再启动网页版")
     if not data_dir:
         raise SystemExit("请设置 CMDBOX_WEB_DATA_DIR（服务器上的数据目录）")
     path = Path(data_dir).expanduser().resolve()
     if not path.is_dir():
         raise SystemExit(f"数据目录不存在：{path}")
+    if not password:
+        host = os.environ.get("CMDBOX_WEB_HOST", "127.0.0.1")
+        if host not in ("127.0.0.1", "localhost"):
+            raise SystemExit("监听非本机地址时必须设置 CMDBOX_WEB_PASSWORD")
     return password, str(path)
 
 
 def create_main(password: str, data_dir: str):
     def main(page: ft.Page):
-        page.title = "CmdBox · 登录"
         configure_web_fonts(page)
+
+        def enter_app():
+            app = CmdBoxApp(page, web_data_dir=data_dir)
+
+            async def disconnect(e):
+                if app.data_service:
+                    await asyncio.to_thread(app.data_service.close)
+                if app.git_service:
+                    await asyncio.to_thread(app.git_service.cleanup)
+
+            page.on_disconnect = disconnect
+
+        if not password:
+            # 本机免密模式：直接进入主界面（web_settings 已确保仅监听本机地址）
+            page.title = "CmdBox"
+            enter_app()
+            return
+
+        page.title = "CmdBox · 登录"
         attempts = 0
 
         async def login(e):
@@ -43,15 +63,7 @@ def create_main(password: str, data_dir: str):
                 page.update()
                 return
             page.clean()
-            app = CmdBoxApp(page, web_data_dir=data_dir)
-
-            async def disconnect(e):
-                if app.data_service:
-                    await asyncio.to_thread(app.data_service.close)
-                if app.git_service:
-                    await asyncio.to_thread(app.git_service.cleanup)
-
-            page.on_disconnect = disconnect
+            enter_app()
 
         password_field = ft.TextField(
             label="访问密码", password=True, can_reveal_password=True,
